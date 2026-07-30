@@ -1,10 +1,65 @@
-.app {
+.workspace {
   display: flex;
-  flex-direction: column;
   height: 100%;
+  min-height: 0;
 }
 
-.app__body {
+.workspace__main {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
+}
+
+.workspace__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  color: #777;
+  font-size: 14px;
+  text-align: center;
+}
+
+.signin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+}
+
+.signin__card {
+  max-width: 360px;
+  text-align: center;
+}
+
+.signin__title {
+  margin: 0 0 12px;
+  font-size: 22px;
+  font-weight: 600;
+  color: #ddd;
+}
+
+.signin__blurb {
+  margin: 0 0 24px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #999;
+}
+
+.signin__button {
+  padding: 10px 20px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 0.1s ease;
+}
+
+.signin__button:hover {
+  filter: brightness(1.1);
 }

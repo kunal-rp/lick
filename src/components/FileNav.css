@@ -1,0 +1,111 @@
+.filenav {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #181818;
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+
+.filenav--collapsed {
+  flex-basis: 40px;
+  align-items: center;
+}
+
+.filenav__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filenav__folder {
+  min-width: 0;
+  font-size: 13px;
+  color: #ddd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filenav__icon-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #aaa;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.filenav__icon-btn:hover {
+  background: #333;
+  color: #fff;
+}
+
+.filenav--collapsed .filenav__icon-btn {
+  margin-top: 8px;
+}
+
+.filenav__change {
+  flex: 0 0 auto;
+  margin: 8px 10px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: #aaa;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filenav__change:hover {
+  background: #333;
+  color: #fff;
+}
+
+.filenav__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 6px 8px;
+}
+
+.filenav__msg {
+  margin: 8px 10px;
+  font-size: 12px;
+  color: #777;
+  line-height: 1.5;
+}
+
+.filenav__file {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #ccc;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.filenav__file:hover {
+  background: #2a2a2a;
+}
+
+.filenav__file.is-selected {
+  background: var(--accent);
+  color: #fff;
+}
