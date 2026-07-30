@@ -1,0 +1,80 @@
+.verbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 14px;
+  background: #181818;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.verbar__script {
+  min-width: 0;
+  max-width: 40%;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ddd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.verbar__version {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.verbar__label {
+  font-size: 12px;
+  color: #888;
+}
+
+.verbar__select {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #252526;
+  color: #ddd;
+  font-size: 12px;
+}
+
+.verbar__spacer {
+  flex: 1 1 auto;
+}
+
+.verbar__btn {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.verbar__btn:hover:not(:disabled) {
+  background: #333;
+  color: #fff;
+}
+
+.verbar__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.verbar__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.verbar__btn--primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  background: var(--accent);
+  color: #fff;
+}

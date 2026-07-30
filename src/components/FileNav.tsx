@@ -1,26 +1,44 @@
 import type { DriveFile } from '../drive/files'
+import { parseVersions } from '../drive/versions'
 import './FileNav.css'
 
 interface FileNavProps {
   folderName: string
-  files: DriveFile[]
-  selectedId: string | null
+  scripts: DriveFile[]
+  versionsByScript: Record<string, DriveFile[]>
+  expandedScripts: Set<string>
+  selectedScriptId: string | null
+  selectedVersionId: string | null
   loading: boolean
+  busy: boolean
   collapsed: boolean
   onToggle: () => void
-  onSelect: (file: DriveFile) => void
+  onToggleExpand: (scriptId: string) => void
+  onSelectScript: (script: DriveFile) => void
+  onSelectVersion: (scriptId: string, versionId: string) => void
+  onNewScript: () => void
   onChangeFolder: () => void
 }
 
-/** Collapsible left panel: the working folder and its selectable files. */
+/**
+ * Collapsible left panel showing the full project directory as a tree:
+ * script folders with their version files nested underneath.
+ */
 export function FileNav({
   folderName,
-  files,
-  selectedId,
+  scripts,
+  versionsByScript,
+  expandedScripts,
+  selectedScriptId,
+  selectedVersionId,
   loading,
+  busy,
   collapsed,
   onToggle,
-  onSelect,
+  onToggleExpand,
+  onSelectScript,
+  onSelectVersion,
+  onNewScript,
   onChangeFolder,
 }: FileNavProps) {
   if (collapsed) {
@@ -29,7 +47,7 @@ export function FileNav({
         <button
           type="button"
           className="filenav__icon-btn"
-          title="Show files"
+          title="Show project"
           onClick={onToggle}
         >
           ☰
@@ -54,29 +72,84 @@ export function FileNav({
         </button>
       </div>
 
-      <button type="button" className="filenav__change" onClick={onChangeFolder}>
-        Change folder
-      </button>
+      <div className="filenav__actions">
+        <button
+          type="button"
+          className="filenav__action"
+          onClick={onNewScript}
+          disabled={busy}
+        >
+          + New script
+        </button>
+        <button
+          type="button"
+          className="filenav__action filenav__action--muted"
+          onClick={onChangeFolder}
+        >
+          Change folder
+        </button>
+      </div>
 
-      <div className="filenav__list">
+      <div className="filenav__tree">
         {loading ? (
           <p className="filenav__msg">Loading…</p>
-        ) : files.length === 0 ? (
-          <p className="filenav__msg">This folder has no files yet.</p>
+        ) : scripts.length === 0 ? (
+          <p className="filenav__msg">No scripts yet. Create one above.</p>
         ) : (
-          files.map((file) => (
-            <button
-              key={file.id}
-              type="button"
-              className={`filenav__file${
-                file.id === selectedId ? ' is-selected' : ''
-              }`}
-              title={file.name}
-              onClick={() => onSelect(file)}
-            >
-              {file.name}
-            </button>
-          ))
+          scripts.map((script) => {
+            const expanded = expandedScripts.has(script.id)
+            const versions = parseVersions(versionsByScript[script.id] ?? [])
+            const latestId = versions[0]?.file.id ?? null
+            return (
+              <div key={script.id} className="tree__script">
+                <div
+                  className={`tree__row${
+                    script.id === selectedScriptId ? ' is-active' : ''
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className="tree__twisty"
+                    title={expanded ? 'Collapse' : 'Expand'}
+                    onClick={() => onToggleExpand(script.id)}
+                  >
+                    {expanded ? '▾' : '▸'}
+                  </button>
+                  <button
+                    type="button"
+                    className="tree__label"
+                    title={script.name}
+                    onClick={() => onSelectScript(script)}
+                  >
+                    <span aria-hidden="true">📁</span> {script.name}
+                  </button>
+                </div>
+
+                {expanded && (
+                  <div className="tree__versions">
+                    {versions.length === 0 ? (
+                      <p className="tree__empty">no versions</p>
+                    ) : (
+                      versions.map((v) => (
+                        <button
+                          key={v.file.id}
+                          type="button"
+                          className={`tree__version${
+                            v.file.id === selectedVersionId ? ' is-selected' : ''
+                          }`}
+                          title={v.file.name}
+                          onClick={() => onSelectVersion(script.id, v.file.id)}
+                        >
+                          <span aria-hidden="true">📄</span> {v.label}
+                          {v.file.id === latestId ? ' (latest)' : ''}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })
         )}
       </div>
     </aside>
