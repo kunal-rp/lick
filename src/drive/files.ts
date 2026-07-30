@@ -123,3 +123,13 @@ export async function updateFileContent(
   })
   if (!res.ok) throw new Error(`Drive save failed (${res.status})`)
 }
+
+/** Move a file to Drive's trash (recoverable), removing it from listings. */
+export async function trashFile(fileId: string): Promise<void> {
+  const res = await fetch(`${API}/files/${fileId}`, {
+    method: 'PATCH',
+    headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  })
+  if (!res.ok) throw new Error(`Drive delete failed (${res.status})`)
+}

@@ -16,6 +16,7 @@ interface FileNavProps {
   onToggleExpand: (scriptId: string) => void
   onSelectScript: (script: DriveFile) => void
   onSelectVersion: (scriptId: string, versionId: string) => void
+  onDeleteVersion: (scriptId: string, versionId: string) => void
   onNewScript: () => void
   onChangeFolder: () => void
 }
@@ -38,6 +39,7 @@ export function FileNav({
   onToggleExpand,
   onSelectScript,
   onSelectVersion,
+  onDeleteVersion,
   onNewScript,
   onChangeFolder,
 }: FileNavProps) {
@@ -131,18 +133,31 @@ export function FileNav({
                       <p className="tree__empty">no versions</p>
                     ) : (
                       versions.map((v) => (
-                        <button
+                        <div
                           key={v.file.id}
-                          type="button"
-                          className={`tree__version${
+                          className={`tree__version-row${
                             v.file.id === selectedVersionId ? ' is-selected' : ''
                           }`}
-                          title={v.file.name}
-                          onClick={() => onSelectVersion(script.id, v.file.id)}
                         >
-                          <span aria-hidden="true">📄</span> {v.label}
-                          {v.file.id === latestId ? ' (latest)' : ''}
-                        </button>
+                          <button
+                            type="button"
+                            className="tree__version"
+                            title={v.file.name}
+                            onClick={() => onSelectVersion(script.id, v.file.id)}
+                          >
+                            <span aria-hidden="true">📄</span> {v.label}
+                            {v.file.id === latestId ? ' (latest)' : ''}
+                          </button>
+                          <button
+                            type="button"
+                            className="tree__delete"
+                            title="Delete version"
+                            disabled={busy}
+                            onClick={() => onDeleteVersion(script.id, v.file.id)}
+                          >
+                            🗑
+                          </button>
+                        </div>
                       ))
                     )}
                   </div>

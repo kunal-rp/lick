@@ -10,6 +10,7 @@ import {
   listFiles,
   listFolders,
   readFile,
+  trashFile,
   updateFileContent,
   type DriveFile,
 } from './drive/files'
@@ -267,6 +268,28 @@ export default function App() {
     })
   }
 
+  function deleteVersion(scriptId: string, versionId: string) {
+    const file = (versionsByScript[scriptId] ?? []).find(
+      (f) => f.id === versionId,
+    )
+    const label = file?.name ?? 'this version'
+    if (
+      !window.confirm(
+        `Delete "${label}"?\n\nIt will be moved to your Google Drive trash.`,
+      )
+    ) {
+      return
+    }
+    void run('Delete version', async () => {
+      await trashFile(versionId)
+      const refreshed = await listFiles(scriptId)
+      setVersionsByScript((prev) => ({ ...prev, [scriptId]: refreshed }))
+      if (selectedVersionId === versionId) {
+        setSelectedVersionId(parseVersions(refreshed)[0]?.file.id ?? null)
+      }
+    })
+  }
+
   // Snapshot the current text as a new version, preserving existing ones.
   function newVersion() {
     if (selectedScriptId === null) return
@@ -320,6 +343,7 @@ export default function App() {
         onToggleExpand={toggleExpand}
         onSelectScript={selectScript}
         onSelectVersion={selectVersion}
+        onDeleteVersion={deleteVersion}
         onNewScript={newScript}
         onChangeFolder={() => choose()}
       />
@@ -342,7 +366,17 @@ export default function App() {
             {treeLoading ? 'Loading…' : 'No scripts yet. Create one.'}
           </div>
         ) : selectedVersionId === null ? (
-          <div className="workspace__empty">This script has no versions.</div>
+          <div className="workspace__empty">
+            <p>This script has no versions.</p>
+            <button
+              type="button"
+              className="workspace__empty-action"
+              onClick={newVersion}
+              disabled={busy}
+            >
+              New version
+            </button>
+          </div>
         ) : content === null ? (
           <div className="workspace__empty">Loading…</div>
         ) : (

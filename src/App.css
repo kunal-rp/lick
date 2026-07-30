@@ -42,6 +42,8 @@
 
 .workspace__empty {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
   align-items: center;
   justify-content: center;
   height: 100%;
@@ -49,6 +51,25 @@
   color: #777;
   font-size: 14px;
   text-align: center;
+}
+
+.workspace__empty p {
+  margin: 0;
+}
+
+.workspace__empty-action {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.workspace__empty-action:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .signin {
