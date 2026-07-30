@@ -12,6 +12,7 @@ import {
 import { Toolbar } from './lexical/Toolbar'
 import { OnChangeFountainPlugin } from './lexical/plugins/OnChangeFountainPlugin'
 import { EmphasisShortcutsPlugin } from './lexical/plugins/EmphasisShortcutsPlugin'
+import { PageBreakGuidesPlugin } from './lexical/plugins/PageBreakGuidesPlugin'
 import './Editor.css'
 
 interface EditorProps {
@@ -19,6 +20,8 @@ interface EditorProps {
   initialValue: string
   /** Fires with the Fountain source (markers included) on load and every edit. */
   onChange: (value: string) => void
+  /** Source line indices where the preview breaks a page (drawn as guides). */
+  pageBreakLines: number[]
 }
 
 // Build the initial state as a single paragraph whose lines are separated by
@@ -43,7 +46,7 @@ function seed(text: string) {
  * screenplay text — the toolbar (and ⌘B/I/U) insert Fountain emphasis markers
  * directly into it, which are the only inline modifications the format defines.
  */
-export function Editor({ initialValue, onChange }: EditorProps) {
+export function Editor({ initialValue, onChange, pageBreakLines }: EditorProps) {
   const initialConfig = {
     namespace: 'fountain-editor',
     theme: { paragraph: 'fe-paragraph' },
@@ -58,6 +61,7 @@ export function Editor({ initialValue, onChange }: EditorProps) {
       <LexicalComposer initialConfig={initialConfig}>
         <Toolbar />
         <div className="editor__surface">
+          <PageBreakGuidesPlugin breakLines={pageBreakLines} />
           <PlainTextPlugin
             contentEditable={
               <ContentEditable className="editor__content" spellCheck={false} />

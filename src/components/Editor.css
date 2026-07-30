@@ -82,6 +82,8 @@
 }
 
 .editor__content {
+  position: relative;
+  z-index: 1;
   min-height: 100%;
   outline: none;
   padding: 20px 24px;
@@ -92,6 +94,23 @@
   tab-size: 4;
   white-space: pre-wrap;
   caret-color: var(--accent);
+}
+
+/* Page-break guides: a subtle dashed line where each page ends. */
+.editor__guides {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.editor__page-break {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
 }
 
 .editor__placeholder {

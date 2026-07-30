@@ -13,11 +13,14 @@ export type ElementType =
   | 'parenthetical'
   | 'transition'
   | 'centered'
+  | 'lyrics'
   | 'page_break'
 
 export interface ScreenplayElement {
   type: ElementType
   text: string
+  /** 0-based index of the source line where this element begins. */
+  line: number
 }
 
 export interface Screenplay {

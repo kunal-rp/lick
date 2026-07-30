@@ -6,24 +6,58 @@
   min-width: 0;
 }
 
+/* Fixed-size pages that scroll/centre — never reflow — as the pane resizes. */
 .preview__scroll {
+  position: relative;
   flex: 1 1 auto;
-  overflow-y: auto;
+  overflow: auto;
   padding: 24px;
 }
 
-/* An approximation of a US-letter screenplay page. */
+/*
+ * True US screenplay geometry, in real units. At 12pt Courier the font's own
+ * metrics fall exactly on the spec grid — 10 characters/inch horizontally
+ * (1 char = 0.1") and 6 lines/inch vertically (line-height 1 = 1/6"):
+ *   page      8.5" x 11"
+ *   margins   left 1.5"   right 1"   top 1"   bottom 1"
+ *   text area 6.0" wide (60 chars)   9" tall (54 lines)
+ */
+.preview__page,
+.preview__measure {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12pt;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
 .preview__page {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 56px 64px;
+  position: relative;
+  width: 8.5in;
+  min-height: 11in;
+  margin: 0 auto 24px;
+  padding: 1in 1in 1in 1.5in;
   background: var(--preview-bg);
   color: var(--preview-text);
-  border-radius: 2px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-  font-family: 'Courier New', 'Courier', monospace;
-  font-size: 14px;
-  line-height: 1.4;
+}
+
+.preview__page-number {
+  position: absolute;
+  top: 0.5in;
+  right: 1in; /* flush with the right text margin */
+  font-size: inherit;
+  color: var(--preview-text);
+}
+
+/* Content width only (6"); no page padding. Off-screen but laid out. */
+.preview__measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6in;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 
 .preview__empty {
@@ -32,50 +66,66 @@
   text-align: center;
 }
 
+/*
+ * Element indents, measured from the text-area (content) left edge, i.e. the
+ * standard position minus the 1.5" left margin:
+ *   character 3.7" -> 2.2"     parenthetical 3.1" -> 1.6"
+ *   dialogue  2.5" -> 1.0" left, right edge 6.0" -> 1.5" from content right
+ */
 .el {
-  margin: 0 0 12px;
+  margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* One blank line before each new block; none within a dialogue block. */
+.el--scene_heading,
+.el--action,
+.el--transition,
+.el--centered,
+.el--lyrics,
+.el--character {
+  margin-top: 1em;
+}
+
+.preview__page > .el:first-child,
+.preview__measure > .el:first-child {
+  margin-top: 0;
 }
 
 .el--scene_heading {
-  font-weight: 700;
   text-transform: uppercase;
-  margin-top: 24px;
-}
-
-.el--action {
-  /* default block */
 }
 
 .el--character {
-  margin-left: 38%;
-  margin-bottom: 0;
+  margin-left: 2.2in;
   text-transform: uppercase;
 }
 
 .el--parenthetical {
-  margin-left: 30%;
-  margin-bottom: 0;
-  font-style: italic;
+  margin-left: 1.6in;
 }
 
 .el--dialogue {
-  margin-left: 20%;
-  margin-right: 18%;
+  margin-left: 1in;
+  margin-right: 1.5in;
 }
 
 .el--transition {
   text-align: right;
   text-transform: uppercase;
-  font-weight: 600;
 }
 
 .el--centered {
   text-align: center;
 }
 
+.el--lyrics {
+  margin-left: 1in;
+  font-style: italic;
+}
+
 .el--page_break {
-  border-top: 1px dashed #bbb;
   height: 0;
-  margin: 24px 0;
+  margin: 0;
 }
