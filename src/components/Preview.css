@@ -127,6 +127,33 @@
   font-style: italic;
 }
 
+/* Dual dialogue: two side-by-side columns spanning the text area. */
+.el--dual {
+  display: flex;
+  gap: 0.5in;
+  margin-top: 1em;
+}
+
+.el--dual-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Column-local formatting: the full-width indents don't apply inside a column. */
+.el--dual .el {
+  margin: 0;
+}
+.el--dual .el--character {
+  margin-left: 0.6in;
+}
+.el--dual .el--parenthetical {
+  margin-left: 0.3in;
+}
+.el--dual .el--dialogue {
+  margin-left: 0;
+  margin-right: 0;
+}
+
 .el--page_break {
   height: 0;
   margin: 0;

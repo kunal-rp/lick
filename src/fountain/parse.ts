@@ -168,6 +168,7 @@ export function parse(source: string): Screenplay {
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
 
   const elements: ScreenplayElement[] = []
+  let prev: { start: number; end: number; dialogue: boolean } | null = null
   let i = skipTitlePage(lines)
   while (i < lines.length) {
     if (lines[i].trim() === '') {
@@ -180,7 +181,20 @@ export function parse(source: string): Screenplay {
       block.push(lines[i])
       i++
     }
+
+    const start = elements.length
     classifyBlock(block, startLine, elements)
+    const end = elements.length
+
+    const isDialogueBlock = elements[start]?.type === 'character'
+    const isDual = isDialogueBlock && /\^\s*$/.test(block[0].trim())
+    if (isDual) {
+      for (let k = start; k < end; k++) elements[k].dual = 'right'
+      if (prev !== null && prev.dialogue) {
+        for (let k = prev.start; k < prev.end; k++) elements[k].dual = 'left'
+      }
+    }
+    prev = { start, end, dialogue: isDialogueBlock }
   }
 
   return { elements }

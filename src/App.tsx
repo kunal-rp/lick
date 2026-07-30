@@ -42,6 +42,13 @@ You'd watch a blank page?
 BARISTA
 I'd watch someone brave enough to stare at one this long.
 
+MAYA
+(raising her mug)
+To blank pages.
+
+BARISTA ^
+To full ones.
+
 Maya almost smiles. Almost.
 
 EXT. CITY STREET - NIGHT

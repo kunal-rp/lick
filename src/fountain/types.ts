@@ -21,6 +21,12 @@ export interface ScreenplayElement {
   text: string
   /** 0-based index of the source line where this element begins. */
   line: number
+  /**
+   * Dual-dialogue side, if this element belongs to a dual-dialogue pair.
+   * The block whose cue carries a trailing `^` is 'right'; the immediately
+   * preceding dialogue block is 'left'. Rendered as two side-by-side columns.
+   */
+  dual?: 'left' | 'right'
 }
 
 export interface Screenplay {

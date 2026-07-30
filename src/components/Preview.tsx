@@ -9,6 +9,36 @@ interface PreviewProps {
   onPageBreaks?: (lines: number[]) => void
 }
 
+// A renderable unit. Single elements and forced breaks map 1:1 to elements;
+// a dual pair coalesces a left and right dialogue block into one two-column row
+// so it measures and paginates as a single unit.
+type Row =
+  | { kind: 'single'; index: number; line: number }
+  | { kind: 'dual'; left: number[]; right: number[]; line: number }
+  | { kind: 'break'; line: number }
+
+function buildRows(elements: ReturnType<typeof parse>['elements']): Row[] {
+  const rows: Row[] = []
+  let i = 0
+  while (i < elements.length) {
+    const el = elements[i]
+    if (el.type === 'page_break') {
+      rows.push({ kind: 'break', line: el.line })
+      i++
+    } else if (el.dual === 'left') {
+      const left: number[] = []
+      while (i < elements.length && elements[i].dual === 'left') left.push(i++)
+      const right: number[] = []
+      while (i < elements.length && elements[i].dual === 'right') right.push(i++)
+      rows.push({ kind: 'dual', left, right, line: elements[left[0]].line })
+    } else {
+      rows.push({ kind: 'single', index: i, line: el.line })
+      i++
+    }
+  }
+  return rows
+}
+
 /**
  * Live-rendered, paginated screenplay preview.
  *
@@ -21,9 +51,10 @@ interface PreviewProps {
  */
 export function Preview({ source, onPageBreaks }: PreviewProps) {
   const screenplay = useMemo(() => parse(source), [source])
+  const rows = useMemo(() => buildRows(screenplay.elements), [screenplay])
   const measureRef = useRef<HTMLDivElement>(null)
   const reportedBreaks = useRef<string>('')
-  // Each entry is a page: the indices of the elements that land on it.
+  // Each entry is a page: the indices (into `rows`) that land on it.
   const [pages, setPages] = useState<number[][]>([])
 
   useLayoutEffect(() => {
@@ -42,16 +73,17 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
     let pageTop = 0
     let startNewPage = false
 
-    kids.forEach((kid, i) => {
-      const element = screenplay.elements[i]
-
-      if (element.type === 'page_break') {
+    rows.forEach((row, i) => {
+      if (row.kind === 'break') {
         if (current.length > 0) groups.push(current)
         current = []
-        startNewPage = true // next element opens a fresh page
-        breakLines.push(element.line) // forced break — at the `===` line
+        startNewPage = true // next row opens a fresh page
+        breakLines.push(row.line) // forced break — at the `===` line
         return
       }
+
+      const kid = kids[i]
+      if (kid === undefined) return
 
       if (startNewPage) {
         pageTop = kid.offsetTop
@@ -63,7 +95,7 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
         groups.push(current)
         current = []
         pageTop = kid.offsetTop
-        breakLines.push(element.line) // auto break — before this element
+        breakLines.push(row.line) // auto break — before this row
       }
       current.push(i)
     })
@@ -76,15 +108,15 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
       reportedBreaks.current = key
       onPageBreaks(breakLines)
     }
-  }, [screenplay, onPageBreaks])
+  }, [rows, onPageBreaks])
 
   const isEmpty = screenplay.elements.length === 0
 
   const renderElement = (index: number) => {
     const el = screenplay.elements[index]
-    // `pages` is computed in a layout effect, so on the render right after an
-    // edit that removed elements it can still hold now-out-of-range indices.
-    // Skip them; the effect re-paginates before paint.
+    // `pages`/`rows` are computed in a layout effect, so on the render right
+    // after an edit that removed elements they can hold now-out-of-range
+    // indices. Skip them; the effect re-paginates before paint.
     if (el === undefined) return null
     return (
       <p key={index} data-type={el.type} className={`el el--${el.type}`}>
@@ -93,18 +125,42 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
     )
   }
 
+  const renderRow = (rowIndex: number) => {
+    const row = rows[rowIndex]
+    if (row === undefined || row.kind === 'break') return null
+    if (row.kind === 'dual') {
+      return (
+        <div key={`r${rowIndex}`} className="el el--dual">
+          <div className="el--dual-col">{row.left.map(renderElement)}</div>
+          <div className="el--dual-col">{row.right.map(renderElement)}</div>
+        </div>
+      )
+    }
+    return renderElement(row.index)
+  }
+
+  // Measurer renders one child per row, in order, so kids[i] === rows[i].
+  const measureRow = (row: Row, i: number) => {
+    if (row.kind === 'break') {
+      return <div key={i} data-type="page_break" className="el--page_break" />
+    }
+    if (row.kind === 'dual') {
+      return (
+        <div key={i} className="el el--dual">
+          <div className="el--dual-col">{row.left.map(renderElement)}</div>
+          <div className="el--dual-col">{row.right.map(renderElement)}</div>
+        </div>
+      )
+    }
+    return renderElement(row.index)
+  }
+
   return (
     <div className="preview">
       <div className="preview__scroll">
         {/* Off-screen single-column layout, used only to measure heights. */}
         <div className="preview__measure" ref={measureRef} aria-hidden="true">
-          {screenplay.elements.map((el, i) =>
-            el.type === 'page_break' ? (
-              <div key={i} data-type="page_break" className="el--page_break" />
-            ) : (
-              renderElement(i)
-            ),
-          )}
+          {rows.map(measureRow)}
         </div>
 
         {isEmpty ? (
@@ -115,7 +171,7 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
           pages.map((group, p) => (
             <div className="preview__page" key={p}>
               {p > 0 && <span className="preview__page-number">{p + 1}.</span>}
-              {group.map(renderElement)}
+              {group.map(renderRow)}
             </div>
           ))
         )}
