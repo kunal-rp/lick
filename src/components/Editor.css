@@ -6,34 +6,106 @@
   min-width: 0;
 }
 
-.editor__header {
+.toolbar {
   flex: 0 0 auto;
-  padding: 8px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #888;
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px;
   background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
   user-select: none;
 }
 
-.editor__textarea {
+.toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #bbb;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.toolbar__btn:hover {
+  background: #333;
+  color: #fff;
+}
+
+.toolbar__btn:active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.toolbar__glyph {
+  width: 11px;
+  text-align: center;
+}
+
+/* Only the letter carries the visual style, not the shortcut hint. */
+.toolbar__btn--bold .toolbar__glyph {
+  font-weight: 700;
+}
+.toolbar__btn--italic .toolbar__glyph {
+  font-style: italic;
+}
+.toolbar__btn--underline .toolbar__glyph {
+  text-decoration: underline;
+}
+
+.toolbar__kbd {
+  font-family: inherit;
+  font-size: 11px;
+  color: #777;
+  background: #2b2b2b;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.toolbar__btn:hover .toolbar__kbd,
+.toolbar__btn:active .toolbar__kbd {
+  color: #ccc;
+}
+
+.editor__surface {
+  position: relative;
   flex: 1 1 auto;
-  width: 100%;
-  resize: none;
-  border: none;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.editor__content {
+  min-height: 100%;
   outline: none;
   padding: 20px 24px;
-  background: transparent;
   color: var(--text);
   font-family: 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
   font-size: 14px;
   line-height: 1.7;
   tab-size: 4;
+  white-space: pre-wrap;
+  caret-color: var(--accent);
 }
 
-.editor__textarea::placeholder {
+.editor__placeholder {
+  position: absolute;
+  top: 20px;
+  left: 24px;
   color: #555;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  pointer-events: none;
+  user-select: none;
+}
+
+.fe-paragraph {
+  margin: 0;
 }

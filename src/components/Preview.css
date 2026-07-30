@@ -6,19 +6,6 @@
   min-width: 0;
 }
 
-.preview__header {
-  flex: 0 0 auto;
-  padding: 8px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #888;
-  background: var(--panel-bg);
-  border-bottom: 1px solid var(--border);
-  user-select: none;
-}
-
 .preview__scroll {
   flex: 1 1 auto;
   overflow-y: auto;

@@ -27,12 +27,9 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app__bar">
-        <span className="app__title">Fountain Editor</span>
-      </header>
       <main className="app__body">
         <SplitPane
-          left={<Editor value={source} onChange={setSource} />}
+          left={<Editor initialValue={source} onChange={setSource} />}
           right={<Preview source={source} />}
         />
       </main>

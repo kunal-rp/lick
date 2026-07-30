@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { parse } from '../fountain'
+import { parse, renderEmphasis } from '../fountain'
 import './Preview.css'
 
 interface PreviewProps {
@@ -17,7 +17,6 @@ export function Preview({ source }: PreviewProps) {
 
   return (
     <div className="preview">
-      <div className="preview__header">Preview</div>
       <div className="preview__scroll">
         <div className="preview__page">
           {screenplay.elements.length === 0 ? (
@@ -25,7 +24,7 @@ export function Preview({ source }: PreviewProps) {
           ) : (
             screenplay.elements.map((el, i) => (
               <p key={i} className={`el el--${el.type}`}>
-                {el.text}
+                {renderEmphasis(el.text)}
               </p>
             ))
           )}
