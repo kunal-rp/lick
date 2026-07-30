@@ -1,0 +1,36 @@
+.split {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.split--dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.split__pane {
+  height: 100%;
+  overflow: hidden;
+}
+
+.split__divider {
+  flex: 0 0 6px;
+  cursor: col-resize;
+  background: var(--divider);
+  position: relative;
+  transition: background 0.12s ease;
+}
+
+.split__divider::after {
+  /* Widen the hit target without widening the visible line. */
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+}
+
+.split__divider:hover,
+.split--dragging .split__divider {
+  background: var(--divider-hover);
+}

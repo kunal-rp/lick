@@ -1,0 +1,94 @@
+.preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #2a2a2a;
+  min-width: 0;
+}
+
+.preview__header {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #888;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.preview__scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* An approximation of a US-letter screenplay page. */
+.preview__page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 56px 64px;
+  background: var(--preview-bg);
+  color: var(--preview-text);
+  border-radius: 2px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  font-family: 'Courier New', 'Courier', monospace;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.preview__empty {
+  color: #999;
+  font-style: italic;
+  text-align: center;
+}
+
+.el {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+}
+
+.el--scene_heading {
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-top: 24px;
+}
+
+.el--action {
+  /* default block */
+}
+
+.el--character {
+  margin-left: 38%;
+  margin-bottom: 0;
+  text-transform: uppercase;
+}
+
+.el--parenthetical {
+  margin-left: 30%;
+  margin-bottom: 0;
+  font-style: italic;
+}
+
+.el--dialogue {
+  margin-left: 20%;
+  margin-right: 18%;
+}
+
+.el--transition {
+  text-align: right;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.el--centered {
+  text-align: center;
+}
+
+.el--page_break {
+  border-top: 1px dashed #bbb;
+  height: 0;
+  margin: 24px 0;
+}

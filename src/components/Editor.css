@@ -1,0 +1,39 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--editor-bg);
+  min-width: 0;
+}
+
+.editor__header {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #888;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.editor__textarea {
+  flex: 1 1 auto;
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: 20px 24px;
+  background: transparent;
+  color: var(--text);
+  font-family: 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  tab-size: 4;
+}
+
+.editor__textarea::placeholder {
+  color: #555;
+}
