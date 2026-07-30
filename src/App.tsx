@@ -4,7 +4,17 @@ import { Preview } from './components/Preview'
 import { SplitPane } from './components/SplitPane'
 import './App.css'
 
-const SAMPLE = `INT. COFFEE SHOP - DAY
+const SAMPLE = `Title:
+    _**THE BLANK PAGE**_
+Credit: Written by
+Author: A. Screenwriter
+Draft date: 7/30/2026
+Contact:
+    Level Ground Pictures
+    123 Marquee Ave.
+    Los Angeles, CA 90028
+
+INT. COFFEE SHOP - DAY
 
 A cramped, sunlit room. MAYA, 30s, hunches over a laptop that has
 seen better decades.

@@ -103,6 +103,12 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
 
     setPages(groups)
 
+    // A title page is its own sheet, so there's an implicit page break before
+    // the first body row — mark it for the editor guide too.
+    if (screenplay.titlePage !== null && rows.length > 0) {
+      breakLines.unshift(rows[0].line)
+    }
+
     const key = breakLines.join(',')
     if (onPageBreaks && key !== reportedBreaks.current) {
       reportedBreaks.current = key
@@ -155,6 +161,29 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
     return renderElement(row.index)
   }
 
+  // Title, Credit, Author(s) and Source are centered; everything else
+  // (Contact, Draft date, …) goes lower-left. (https://fountain.io/syntax)
+  const CENTERED_KEYS = ['title', 'credit', 'author', 'authors', 'source']
+  const renderTitlePage = () => {
+    const tp = screenplay.titlePage
+    if (tp === null) return null
+    const renderField = (f: (typeof tp)[number], i: number) => (
+      <div className="title__field" key={i}>
+        {f.values.map((v, vi) => (
+          <div key={vi}>{renderEmphasis(v)}</div>
+        ))}
+      </div>
+    )
+    const centered = tp.filter((f) => CENTERED_KEYS.includes(f.key.toLowerCase()))
+    const lower = tp.filter((f) => !CENTERED_KEYS.includes(f.key.toLowerCase()))
+    return (
+      <div className="preview__page preview__title">
+        <div className="title__center">{centered.map(renderField)}</div>
+        <div className="title__lower">{lower.map(renderField)}</div>
+      </div>
+    )
+  }
+
   return (
     <div className="preview">
       <div className="preview__scroll">
@@ -163,18 +192,20 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
           {rows.map(measureRow)}
         </div>
 
-        {isEmpty ? (
-          <div className="preview__page">
-            <p className="preview__empty">Nothing to preview yet.</p>
-          </div>
-        ) : (
-          pages.map((group, p) => (
-            <div className="preview__page" key={p}>
-              {p > 0 && <span className="preview__page-number">{p + 1}.</span>}
-              {group.map(renderRow)}
-            </div>
-          ))
-        )}
+        {renderTitlePage()}
+
+        {isEmpty
+          ? screenplay.titlePage === null && (
+              <div className="preview__page">
+                <p className="preview__empty">Nothing to preview yet.</p>
+              </div>
+            )
+          : pages.map((group, p) => (
+              <div className="preview__page" key={p}>
+                {p > 0 && <span className="preview__page-number">{p + 1}.</span>}
+                {group.map(renderRow)}
+              </div>
+            ))}
       </div>
     </div>
   )

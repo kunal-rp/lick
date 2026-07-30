@@ -4,4 +4,9 @@ export const FOUNTAIN_SPEC_VERSION = '1.1'
 
 export { parse } from './parse'
 export { renderEmphasis } from './emphasis'
-export type { Screenplay, ScreenplayElement, ElementType } from './types'
+export type {
+  Screenplay,
+  ScreenplayElement,
+  ElementType,
+  TitlePageField,
+} from './types'

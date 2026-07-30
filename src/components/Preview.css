@@ -49,6 +49,33 @@
   color: var(--preview-text);
 }
 
+/* Title page: title block centered, contact/date lower-left. */
+.preview__title {
+  display: flex;
+  flex-direction: column;
+}
+
+.title__center {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.title__lower {
+  align-self: flex-start;
+  text-align: left;
+}
+
+.title__field {
+  margin-bottom: 1em;
+}
+.title__field:last-child {
+  margin-bottom: 0;
+}
+
 /* Content width only (6"); no page padding. Off-screen but laid out. */
 .preview__measure {
   position: absolute;

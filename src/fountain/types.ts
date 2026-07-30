@@ -29,6 +29,14 @@ export interface ScreenplayElement {
   dual?: 'left' | 'right'
 }
 
+/** One title-page entry, e.g. `Author: Stu Maschwitz` or a multi-value key. */
+export interface TitlePageField {
+  key: string
+  values: string[]
+}
+
 export interface Screenplay {
+  /** Parsed title page fields in document order, or null if none. */
+  titlePage: TitlePageField[] | null
   elements: ScreenplayElement[]
 }

@@ -1,4 +1,4 @@
-import type { ScreenplayElement, Screenplay } from './types'
+import type { ScreenplayElement, Screenplay, TitlePageField } from './types'
 
 // Fountain 1.1 parser (https://fountain.io/syntax).
 //
@@ -28,13 +28,44 @@ function stripSceneNumber(text: string): string {
   return text.replace(SCENE_NUMBER, '')
 }
 
-/** Index of the first body line after an optional leading title page. */
-function skipTitlePage(lines: string[]): number {
-  let j = 0
-  while (j < lines.length && lines[j].trim() === '') j++
-  if (j >= lines.length || !TITLE_KEY.test(lines[j].trim())) return 0
-  while (j < lines.length && lines[j].trim() !== '') j++
-  return j
+/**
+ * Parse an optional leading title page into ordered key/value fields.
+ *
+ * A field is `Key: value` (value optional inline); subsequent lines indented by
+ * 3+ spaces or a tab are additional values for the current key. The title page
+ * ends at the first blank line. Only recognised if the first line's key is a
+ * known title-page key, so a body opener like "FADE IN:" isn't misread.
+ */
+function parseTitlePage(lines: string[]): {
+  fields: TitlePageField[] | null
+  bodyStart: number
+} {
+  let start = 0
+  while (start < lines.length && lines[start].trim() === '') start++
+  if (start >= lines.length || !TITLE_KEY.test(lines[start].trim())) {
+    return { fields: null, bodyStart: 0 }
+  }
+
+  const fields: TitlePageField[] = []
+  let current: TitlePageField | null = null
+  let j = start
+  for (; j < lines.length && lines[j].trim() !== ''; j++) {
+    const line = lines[j]
+    if (/^(\s{3,}|\t)/.test(line)) {
+      if (current !== null) current.values.push(line.trim())
+      continue
+    }
+    const match = line.match(/^([^:]+):\s*(.*)$/)
+    if (match) {
+      current = { key: match[1].trim(), values: [] }
+      if (match[2].trim() !== '') current.values.push(match[2].trim())
+      fields.push(current)
+    } else if (current !== null) {
+      current.values.push(line.trim())
+    }
+  }
+
+  return { fields: fields.length > 0 ? fields : null, bodyStart: j }
 }
 
 /**
@@ -167,9 +198,11 @@ function classifyBlock(
 export function parse(source: string): Screenplay {
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
 
+  const { fields: titlePage, bodyStart } = parseTitlePage(lines)
+
   const elements: ScreenplayElement[] = []
   let prev: { start: number; end: number; dialogue: boolean } | null = null
-  let i = skipTitlePage(lines)
+  let i = bodyStart
   while (i < lines.length) {
     if (lines[i].trim() === '') {
       i++
@@ -197,5 +230,5 @@ export function parse(source: string): Screenplay {
     prev = { start, end, dialogue: isDialogueBlock }
   }
 
-  return { elements }
+  return { titlePage, elements }
 }
