@@ -82,6 +82,10 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
 
   const renderElement = (index: number) => {
     const el = screenplay.elements[index]
+    // `pages` is computed in a layout effect, so on the render right after an
+    // edit that removed elements it can still hold now-out-of-range indices.
+    // Skip them; the effect re-paginates before paint.
+    if (el === undefined) return null
     return (
       <p key={index} data-type={el.type} className={`el el--${el.type}`}>
         {renderEmphasis(el.text)}

@@ -99,7 +99,9 @@
 
 .el--character {
   margin-left: 2.2in;
-  text-transform: uppercase;
+  /* No text-transform: auto-detected cues are already uppercase in the source,
+     and forcing uppercase would clobber `@`-forced case (e.g. @McCLANE) and
+     lowercase character extensions like "(into phone)". */
 }
 
 .el--parenthetical {
