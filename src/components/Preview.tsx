@@ -136,7 +136,7 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
     if (row === undefined || row.kind === 'break') return null
     if (row.kind === 'dual') {
       return (
-        <div key={`r${rowIndex}`} className="el el--dual">
+        <div key={`row-${rowIndex}`} className="el el--dual">
           <div className="el--dual-col">{row.left.map(renderElement)}</div>
           <div className="el--dual-col">{row.right.map(renderElement)}</div>
         </div>
@@ -146,13 +146,17 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
   }
 
   // Measurer renders one child per row, in order, so kids[i] === rows[i].
+  // Row-level keys are prefixed so they can't collide with the element-index
+  // keys that renderElement uses for single rows.
   const measureRow = (row: Row, i: number) => {
     if (row.kind === 'break') {
-      return <div key={i} data-type="page_break" className="el--page_break" />
+      return (
+        <div key={`row-${i}`} data-type="page_break" className="el--page_break" />
+      )
     }
     if (row.kind === 'dual') {
       return (
-        <div key={i} className="el el--dual">
+        <div key={`row-${i}`} className="el el--dual">
           <div className="el--dual-col">{row.left.map(renderElement)}</div>
           <div className="el--dual-col">{row.right.map(renderElement)}</div>
         </div>
