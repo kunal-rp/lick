@@ -8,6 +8,8 @@ interface VersionBarProps {
   busy: boolean
   dirty: boolean
   saving: boolean
+  /** Timestamp (ms) of the last successful save this session, or null. */
+  savedAt: number | null
   onSelectVersion: (fileId: string) => void
   onSave: () => void
   onNewVersion: () => void
@@ -21,11 +23,19 @@ export function VersionBar({
   busy,
   dirty,
   saving,
+  savedAt,
   onSelectVersion,
   onSave,
   onNewVersion,
 }: VersionBarProps) {
   const saveLabel = saving ? 'Saving…' : dirty ? 'Save' : 'Saved'
+  const savedTime =
+    savedAt !== null
+      ? new Date(savedAt).toLocaleTimeString([], {
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      : null
   // versions[] is most-recent-first, so index 0 is the latest.
   const latestId = versions.length > 0 ? versions[0].file.id : null
 
@@ -53,12 +63,18 @@ export function VersionBar({
 
       <div className="verbar__spacer" />
 
+      {savedTime !== null && !saving && (
+        <span className="verbar__saved-at" title={`Last saved at ${savedTime}`}>
+          Last saved {savedTime}
+        </span>
+      )}
+
       <button
         type="button"
         className="verbar__btn"
         onClick={onSave}
         disabled={saving || !dirty}
-        title="Auto-saves in the background; click to save now"
+        title="Auto-saves in the background; ⌘/Ctrl+S or click to save now"
       >
         {saveLabel}
       </button>

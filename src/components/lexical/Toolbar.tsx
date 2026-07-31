@@ -21,7 +21,17 @@ const FORMATS: {
   { key: 'underline', label: 'U', accel: 'U', sample: '_text_' },
 ]
 
-export function Toolbar() {
+// A view panel that can be shown/hidden from the toolbar (e.g. Preview).
+export interface ViewToggle {
+  key: string
+  label: string
+  glyph: string
+  title: string
+  active: boolean
+  onToggle: () => void
+}
+
+export function Toolbar({ viewToggles = [] }: { viewToggles?: ViewToggle[] }) {
   const [editor] = useLexicalComposerContext()
 
   return (
@@ -39,10 +49,30 @@ export function Toolbar() {
             onClick={() => toggleEmphasis(editor, MARKERS[f.key])}
           >
             <span className="toolbar__glyph">{f.label}</span>
-            <kbd className="toolbar__kbd">{shortcut}</kbd>
           </button>
         )
       })}
+
+      {viewToggles.length > 0 && (
+        <div className="toolbar__views">
+          {viewToggles.map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              title={v.title}
+              aria-pressed={v.active}
+              className={`toolbar__btn toolbar__toggle${
+                v.active ? ' toolbar__toggle--active' : ''
+              }`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={v.onToggle}
+            >
+              <span className="toolbar__glyph">{v.glyph}</span>
+              <span className="toolbar__toggle-label">{v.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Editor } from './components/Editor'
 import { Preview } from './components/Preview'
+import { InsightsPanel } from './components/InsightsPanel'
 import { SplitPane } from './components/SplitPane'
 import { FileNav } from './components/FileNav'
 import { VersionBar } from './components/VersionBar'
@@ -21,6 +22,8 @@ import {
 } from './drive/versions'
 import { useDriveAuth } from './drive/useDriveAuth'
 import { useWorkingFolder } from './drive/useWorkingFolder'
+import { loadLastOpened, saveLastOpened } from './lastOpened'
+import { loadTheme, saveTheme, type Theme } from './theme'
 import './App.css'
 
 // Background auto-save: persist after the user pauses, or after enough edits,
@@ -67,6 +70,16 @@ export default function App() {
   const [pageBreakLines, setPageBreakLines] = useState<number[]>([])
 
   const [navCollapsed, setNavCollapsed] = useState(false)
+  // Light/dark theme, applied to <html> as data-theme and persisted.
+  const [theme, setTheme] = useState<Theme>(loadTheme)
+  // Whether the preview is shown (toggled from the editor toolbar). The
+  // Characters & Locations panel is always present below it (collapsible).
+  const [showPreview, setShowPreview] = useState(true)
+  // Jump-to-line request forwarded to the editor; the nonce lets the same
+  // line re-fire on repeated clicks.
+  const [jump, setJump] = useState<{ line: number; nonce: number } | null>(null)
+  const jumpToLine = (line: number) =>
+    setJump((j) => ({ line, nonce: (j?.nonce ?? 0) + 1 }))
   // True while a create/rename/new-version Drive write is in flight.
   const [busy, setBusy] = useState(false)
   // Last Drive-operation error message, shown to the user.
@@ -75,6 +88,15 @@ export default function App() {
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>(
     'saved',
   )
+  // Timestamp (ms) of the last successful save this session, for the save UI.
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+
+  // Scroll offset remembered per version, seeded from the last session.
+  const scrollByVersionRef = useRef<Record<string, number>>(
+    loadLastOpened()?.scrollByVersion ?? {},
+  )
+  // Latest persist() so the ⌘/Ctrl+S handler always calls the current closure.
+  const persistRef = useRef<() => void>(() => {})
 
   const savingRef = useRef(false)
   const changeCountRef = useRef(0)
@@ -103,12 +125,29 @@ export default function App() {
         setScripts(list)
         setVersionsByScript(byScript)
         setExpandedScripts(new Set(list.map((s) => s.id)))
+
+        // Prefer the last-opened script/version if it still exists; otherwise
+        // fall back to the first script's most recent version.
         const first = list[0] ?? null
-        setSelectedScriptId(first?.id ?? null)
-        const latest = first
-          ? parseVersions(byScript[first.id] ?? [])[0]
-          : undefined
-        setSelectedVersionId(latest?.file.id ?? null)
+        let scriptId = first?.id ?? null
+        let versionId = first
+          ? (parseVersions(byScript[first.id] ?? [])[0]?.file.id ?? null)
+          : null
+
+        const saved = loadLastOpened()
+        if (saved !== null && saved.folderId === folderId) {
+          const scriptExists = list.some((s) => s.id === saved.scriptId)
+          if (scriptExists) {
+            scriptId = saved.scriptId
+            const versions = byScript[saved.scriptId] ?? []
+            versionId = versions.some((f) => f.id === saved.versionId)
+              ? saved.versionId
+              : (parseVersions(versions)[0]?.file.id ?? null)
+          }
+        }
+
+        setSelectedScriptId(scriptId)
+        setSelectedVersionId(versionId)
       })
       .catch((err) => {
         if (!active) return
@@ -127,10 +166,44 @@ export default function App() {
     }
   }, [folderId])
 
+  // Apply and persist the theme.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    saveTheme(theme)
+  }, [theme])
+
   // Track the selected version for the async-save guard.
   useEffect(() => {
     currentVersionIdRef.current = selectedVersionId
   }, [selectedVersionId])
+
+  // Remember the currently-open script/version so a reload reopens to it.
+  const rememberOpen = () => {
+    if (folderId !== null && selectedScriptId !== null && selectedVersionId !== null) {
+      saveLastOpened({
+        folderId,
+        scriptId: selectedScriptId,
+        versionId: selectedVersionId,
+        scrollByVersion: scrollByVersionRef.current,
+      })
+    }
+  }
+  useEffect(rememberOpen, [folderId, selectedScriptId, selectedVersionId])
+
+  // ⌘/Ctrl+S saves the editor's current text to the open version.
+  useEffect(() => {
+    persistRef.current = () => void persist()
+  })
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        persistRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // Load the selected version's content.
   useEffect(() => {
@@ -153,6 +226,7 @@ export default function App() {
         // Fresh version: reset auto-save bookkeeping.
         changeCountRef.current = 0
         lastSavedAtRef.current = Date.now()
+        setSavedAt(null)
         setSaveState('saved')
       })
       .catch((err) => {
@@ -202,6 +276,7 @@ export default function App() {
         setContent(text)
         changeCountRef.current = 0
         lastSavedAtRef.current = Date.now()
+        setSavedAt(Date.now())
         setSaveState('saved')
       }
     } catch (err) {
@@ -339,7 +414,11 @@ export default function App() {
         loading={treeLoading}
         busy={busy}
         collapsed={navCollapsed}
+        theme={theme}
         onToggle={() => setNavCollapsed((c) => !c)}
+        onToggleTheme={() =>
+          setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+        }
         onToggleExpand={toggleExpand}
         onSelectScript={selectScript}
         onSelectVersion={selectVersion}
@@ -388,6 +467,7 @@ export default function App() {
               busy={busy}
               dirty={dirty}
               saving={saveState === 'saving'}
+              savedAt={savedAt}
               onSelectVersion={(id) =>
                 selectedScriptId !== null && selectVersion(selectedScriptId, id)
               }
@@ -402,10 +482,47 @@ export default function App() {
                     initialValue={content}
                     onChange={setSource}
                     pageBreakLines={pageBreakLines}
+                    jumpTo={jump}
+                    initialScrollTop={
+                      selectedVersionId !== null
+                        ? scrollByVersionRef.current[selectedVersionId]
+                        : undefined
+                    }
+                    onScrollChange={(top) => {
+                      if (selectedVersionId !== null) {
+                        scrollByVersionRef.current[selectedVersionId] = top
+                        rememberOpen()
+                      }
+                    }}
+                    viewToggles={[
+                      {
+                        key: 'preview',
+                        glyph: '▦',
+                        label: 'Preview',
+                        title: 'Show or hide the preview',
+                        active: showPreview,
+                        onToggle: () => setShowPreview((v) => !v),
+                      },
+                    ]}
                   />
                 }
                 right={
-                  <Preview source={source} onPageBreaks={setPageBreakLines} />
+                  <div className="rightstack">
+                    {showPreview && (
+                      <div className="rightstack__preview">
+                        <Preview
+                          source={source}
+                          onPageBreaks={setPageBreakLines}
+                          onJump={jumpToLine}
+                        />
+                      </div>
+                    )}
+                    <InsightsPanel
+                      source={source}
+                      grow={!showPreview}
+                      onJump={jumpToLine}
+                    />
+                  </div>
                 }
               />
             </div>

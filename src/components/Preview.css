@@ -1,9 +1,58 @@
+/*
+ * Screenplay preview — deliberately NOT themed. The pages always render as a
+ * printed screenplay (white paper, black Courier text) and the surrounding
+ * chrome stays a fixed neutral, regardless of the app's light/dark theme. Only
+ * the geometry and typography of the screenplay format apply here, so every
+ * color below is a constant, never a theme token.
+ */
 .preview {
   display: flex;
   flex-direction: column;
   height: 100%;
   background: #2a2a2a;
   min-width: 0;
+}
+
+.preview__toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 36px;
+  padding: 0 14px;
+  background: #181818;
+  border-bottom: 1px solid #333;
+  user-select: none;
+}
+
+.preview__zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview__zoom-label {
+  font-size: 12px;
+  color: #888;
+}
+
+.preview__zoom-slider {
+  width: 140px;
+  cursor: pointer;
+  accent-color: #a0643a;
+}
+
+.preview__zoom-value {
+  font-size: 12px;
+  color: #ccc;
+  min-width: 3.5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scales the rendered sheets only (the measurer lives outside this wrapper). */
+.preview__pages {
+  zoom: var(--preview-zoom, 1);
 }
 
 /* Fixed-size pages that scroll/centre — never reflow — as the pane resizes. */
@@ -36,8 +85,8 @@
   min-height: 11in;
   margin: 0 auto 24px;
   padding: 1in 1in 1in 1.5in;
-  background: var(--preview-bg);
-  color: var(--preview-text);
+  background: #ffffff;
+  color: #1a1a1a;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 }
 
@@ -46,7 +95,7 @@
   top: 0.5in;
   right: 1in; /* flush with the right text margin */
   font-size: inherit;
-  color: var(--preview-text);
+  color: #1a1a1a;
 }
 
 /* Title page: title block centered, contact/date lower-left. */

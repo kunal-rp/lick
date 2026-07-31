@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #181818;
+  background: var(--panel-bg);
   border-right: 1px solid var(--border);
   user-select: none;
 }
@@ -26,7 +26,7 @@
 .filenav__folder {
   min-width: 0;
   font-size: 13px;
-  color: #ddd;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -39,15 +39,15 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #aaa;
+  color: var(--text-muted);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
 }
 
 .filenav__icon-btn:hover {
-  background: #333;
-  color: #fff;
+  background: var(--hover);
+  color: var(--text);
 }
 
 .filenav--collapsed .filenav__icon-btn {
@@ -67,14 +67,14 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   background: transparent;
-  color: #ccc;
+  color: var(--text);
   font-size: 12px;
   cursor: pointer;
 }
 
 .filenav__action:hover:not(:disabled) {
-  background: #333;
-  color: #fff;
+  background: var(--hover);
+  color: var(--text);
 }
 
 .filenav__action:disabled {
@@ -83,7 +83,32 @@
 }
 
 .filenav__action--muted {
-  color: #888;
+  color: var(--text-muted);
+}
+
+/* Light/dark theme toggle. */
+.filenav__theme {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filenav__theme:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.filenav__theme-glyph {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .filenav__tree {
@@ -96,7 +121,7 @@
 .filenav__msg {
   margin: 8px 10px;
   font-size: 12px;
-  color: #777;
+  color: var(--text-faint);
   line-height: 1.5;
 }
 
@@ -108,11 +133,11 @@
 }
 
 .tree__row:hover {
-  background: #2a2a2a;
+  background: var(--hover);
 }
 
 .tree__row.is-active {
-  background: #2f2f2f;
+  background: var(--selected);
 }
 
 .tree__twisty {
@@ -121,7 +146,7 @@
   height: 26px;
   border: none;
   background: transparent;
-  color: #888;
+  color: var(--text-muted);
   font-size: 10px;
   cursor: pointer;
 }
@@ -132,7 +157,7 @@
   padding: 6px 4px;
   border: none;
   background: transparent;
-  color: #ddd;
+  color: var(--text);
   font-size: 13px;
   text-align: left;
   white-space: nowrap;
@@ -155,7 +180,7 @@
 }
 
 .tree__version-row:hover {
-  background: #2a2a2a;
+  background: var(--hover);
 }
 
 .tree__version-row.is-selected {
@@ -168,7 +193,7 @@
   padding: 5px 8px;
   border: none;
   background: transparent;
-  color: #bbb;
+  color: var(--text-muted);
   font-size: 12px;
   text-align: left;
   white-space: nowrap;
@@ -178,7 +203,7 @@
 }
 
 .tree__version-row.is-selected .tree__version {
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .tree__delete {
@@ -201,12 +226,12 @@
 
 .tree__delete:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--hover);
 }
 
 .tree__empty {
   margin: 2px 10px;
   font-size: 11px;
   font-style: italic;
-  color: #666;
+  color: var(--text-faint);
 }

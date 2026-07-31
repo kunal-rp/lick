@@ -1,4 +1,5 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { parse, renderEmphasis } from '../fountain'
 import { LINES_PER_PAGE } from '../pagination'
 import './Preview.css'
@@ -7,7 +8,13 @@ interface PreviewProps {
   source: string
   /** Reports the source line index where each page break falls (in order). */
   onPageBreaks?: (lines: number[]) => void
+  /** Jump the editor to a source line when a preview element is double-clicked. */
+  onJump?: (line: number) => void
 }
+
+// Preview magnification bounds, as percentages.
+const ZOOM_MIN = 10
+const ZOOM_MAX = 200
 
 // A renderable unit. Single elements and forced breaks map 1:1 to elements;
 // a dual pair coalesces a left and right dialogue block into one two-column row
@@ -49,10 +56,11 @@ function buildRows(elements: ReturnType<typeof parse>['elements']): Row[] {
  *   - Fountain:   a `===` element forces an immediate break.
  * The source line of each break is reported so the editor can mark it.
  */
-export function Preview({ source, onPageBreaks }: PreviewProps) {
+export function Preview({ source, onPageBreaks, onJump }: PreviewProps) {
   const screenplay = useMemo(() => parse(source), [source])
   const rows = useMemo(() => buildRows(screenplay.elements), [screenplay])
   const measureRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const reportedBreaks = useRef<string>('')
   // Each entry is a page: the indices (into `rows`) that land on it.
   const [pages, setPages] = useState<number[][]>([])
@@ -116,6 +124,26 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
     }
   }, [rows, onPageBreaks])
 
+  // Preview magnification, as a percentage (100 = actual size).
+  const [zoom, setZoom] = useState(100)
+
+  // Trackpad pinch and ctrl+wheel arrive as wheel events with `ctrlKey` set;
+  // consume them to drive zoom (and stop the browser's own page zoom). The
+  // listener is attached natively so it can be non-passive and preventDefault.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el === null) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      setZoom((z) =>
+        Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * Math.exp(-e.deltaY * 0.005))),
+      )
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
   const isEmpty = screenplay.elements.length === 0
 
   const renderElement = (index: number) => {
@@ -125,7 +153,13 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
     // indices. Skip them; the effect re-paginates before paint.
     if (el === undefined) return null
     return (
-      <p key={index} data-type={el.type} className={`el el--${el.type}`}>
+      <p
+        key={index}
+        data-type={el.type}
+        className={`el el--${el.type}`}
+        title="Double-click to jump to this line in the editor"
+        onDoubleClick={() => onJump?.(el.line)}
+      >
         {renderEmphasis(el.text)}
       </p>
     )
@@ -190,26 +224,52 @@ export function Preview({ source, onPageBreaks }: PreviewProps) {
 
   return (
     <div className="preview">
-      <div className="preview__scroll">
-        {/* Off-screen single-column layout, used only to measure heights. */}
+      <div className="preview__toolbar">
+        <label className="preview__zoom">
+          <span className="preview__zoom-label">Zoom</span>
+          <input
+            className="preview__zoom-slider"
+            type="range"
+            min={ZOOM_MIN}
+            max={ZOOM_MAX}
+            step={5}
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+            aria-label="Preview magnification"
+          />
+          <span className="preview__zoom-value">{Math.round(zoom)}%</span>
+        </label>
+      </div>
+      <div className="preview__scroll" ref={scrollRef}>
+        {/* Off-screen single-column layout, used only to measure heights.
+            Kept outside the zoom wrapper so pagination stays deterministic. */}
         <div className="preview__measure" ref={measureRef} aria-hidden="true">
           {rows.map(measureRow)}
         </div>
 
-        {renderTitlePage()}
+        {/* `zoom` scales the rendered sheets only; it doesn't affect the
+            measurer's layout metrics, so page breaks are unchanged. */}
+        <div
+          className="preview__pages"
+          style={{ '--preview-zoom': zoom / 100 } as CSSProperties}
+        >
+          {renderTitlePage()}
 
-        {isEmpty
-          ? screenplay.titlePage === null && (
-              <div className="preview__page">
-                <p className="preview__empty">Nothing to preview yet.</p>
-              </div>
-            )
-          : pages.map((group, p) => (
-              <div className="preview__page" key={p}>
-                {p > 0 && <span className="preview__page-number">{p + 1}.</span>}
-                {group.map(renderRow)}
-              </div>
-            ))}
+          {isEmpty
+            ? screenplay.titlePage === null && (
+                <div className="preview__page">
+                  <p className="preview__empty">Nothing to preview yet.</p>
+                </div>
+              )
+            : pages.map((group, p) => (
+                <div className="preview__page" key={p}>
+                  {p > 0 && (
+                    <span className="preview__page-number">{p + 1}.</span>
+                  )}
+                  {group.map(renderRow)}
+                </div>
+              ))}
+        </div>
       </div>
     </div>
   )

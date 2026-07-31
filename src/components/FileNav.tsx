@@ -1,5 +1,6 @@
 import type { DriveFile } from '../drive/files'
 import { parseVersions } from '../drive/versions'
+import type { Theme } from '../theme'
 import './FileNav.css'
 
 interface FileNavProps {
@@ -12,7 +13,9 @@ interface FileNavProps {
   loading: boolean
   busy: boolean
   collapsed: boolean
+  theme: Theme
   onToggle: () => void
+  onToggleTheme: () => void
   onToggleExpand: (scriptId: string) => void
   onSelectScript: (script: DriveFile) => void
   onSelectVersion: (scriptId: string, versionId: string) => void
@@ -35,7 +38,9 @@ export function FileNav({
   loading,
   busy,
   collapsed,
+  theme,
   onToggle,
+  onToggleTheme,
   onToggleExpand,
   onSelectScript,
   onSelectVersion,
@@ -89,6 +94,18 @@ export function FileNav({
           onClick={onChangeFolder}
         >
           Change folder
+        </button>
+        <button
+          type="button"
+          className="filenav__theme"
+          onClick={onToggleTheme}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+        >
+          <span className="filenav__theme-glyph" aria-hidden="true">
+            {theme === 'dark' ? '☀' : '☾'}
+          </span>
+          {theme === 'dark' ? 'Light theme' : 'Dark theme'}
         </button>
       </div>
 
