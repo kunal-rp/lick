@@ -97,6 +97,13 @@ export default function App() {
   const jumpToLine = (line: number) =>
     setJump((j) => ({ line, nonce: (j?.nonce ?? 0) + 1 }))
 
+  // Reveal request forwarded to the preview (editor double-click → scroll).
+  const [reveal, setReveal] = useState<{ line: number; nonce: number } | null>(
+    null,
+  )
+  const revealInPreview = (line: number) =>
+    setReveal((r) => ({ line, nonce: (r?.nonce ?? 0) + 1 }))
+
   // Comments for the selected script (all versions), from its comments.json.
   const [comments, setComments] = useState<Comment[]>([])
   const commentsFileIdRef = useRef<string | null>(null)
@@ -612,6 +619,7 @@ export default function App() {
                         rememberOpen()
                       }
                     }}
+                    onRevealInPreview={revealInPreview}
                     viewToggles={[
                       {
                         key: 'preview',
@@ -642,6 +650,7 @@ export default function App() {
                             source={source}
                             onPageBreaks={setPageBreakLines}
                             onJump={jumpToLine}
+                            reveal={reveal}
                             versionId={selectedVersionId}
                             comments={comments.filter(
                               (c) => c.versionId === selectedVersionId,

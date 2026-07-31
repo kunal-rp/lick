@@ -15,6 +15,7 @@ import { OnChangeFountainPlugin } from './lexical/plugins/OnChangeFountainPlugin
 import { EmphasisShortcutsPlugin } from './lexical/plugins/EmphasisShortcutsPlugin'
 import { PageBreakGuidesPlugin } from './lexical/plugins/PageBreakGuidesPlugin'
 import { JumpToLinePlugin } from './lexical/plugins/JumpToLinePlugin'
+import { RevealPreviewPlugin } from './lexical/plugins/RevealPreviewPlugin'
 import './Editor.css'
 
 interface EditorProps {
@@ -32,6 +33,8 @@ interface EditorProps {
   initialScrollTop?: number
   /** Reports the editor scroll offset as the user scrolls (rAF-throttled). */
   onScrollChange?: (top: number) => void
+  /** Double-clicking a line reports it so the preview can scroll to it. */
+  onRevealInPreview?: (line: number) => void
 }
 
 // Build the initial state as a single paragraph whose lines are separated by
@@ -64,6 +67,7 @@ export function Editor({
   jumpTo,
   initialScrollTop,
   onScrollChange,
+  onRevealInPreview,
 }: EditorProps) {
   const initialConfig = {
     namespace: 'fountain-editor',
@@ -117,6 +121,7 @@ export function Editor({
         <HistoryPlugin />
         <EmphasisShortcutsPlugin />
         <JumpToLinePlugin target={jumpTo ?? null} />
+        <RevealPreviewPlugin onReveal={onRevealInPreview} />
         <OnChangeFountainPlugin onChange={onChange} />
       </LexicalComposer>
     </div>

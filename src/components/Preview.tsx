@@ -12,6 +12,8 @@ interface PreviewProps {
   onPageBreaks?: (lines: number[]) => void
   /** Jump the editor to a source line when preview text is selected. */
   onJump?: (line: number) => void
+  /** Scroll the preview to a source line (editor double-click → reveal). */
+  reveal?: { line: number; nonce: number } | null
   /** Comments anchored to the version currently shown. */
   comments?: Comment[]
   /** The version id to anchor new comments to (null hides commenting). */
@@ -106,6 +108,7 @@ export function Preview({
   source,
   onPageBreaks,
   onJump,
+  reveal = null,
   comments = [],
   versionId = null,
   authorName = 'You',
@@ -219,6 +222,19 @@ export function Preview({
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  // Fit: the largest zoom that still shows the full text line width. The
+  // rightmost text sits at 1.5in (left margin) + 6in (text area) = 7.5in from
+  // the page's left edge, so fit that extent to the available width — the blank
+  // right margin may crop, maximizing legible text size.
+  const fitZoom = () => {
+    const scroll = scrollRef.current
+    if (scroll === null) return
+    const textExtentPx = 7.5 * 96 // through the right edge of the text area
+    const available = scroll.clientWidth - 48 // .preview__scroll padding (24px each)
+    const z = Math.floor((available / textExtentPx) * 100)
+    setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)))
+  }
+
   // A DOM Range for a comment's anchor, spanning from its start element to its
   // end element (which may differ for a multi-line selection), or null if
   // either element is missing.
@@ -308,11 +324,42 @@ export function Preview({
     setCommentFocus(null)
   }, [versionId])
 
+  // Editor double-click → scroll the preview to the element containing that
+  // source line (the element whose start line is the greatest ≤ the line), and
+  // briefly flash it.
+  useEffect(() => {
+    if (reveal === null || pagesRef.current === null) return
+    let best: HTMLElement | null = null
+    let bestLine = -1
+    pagesRef.current.querySelectorAll('.el[data-line]').forEach((node) => {
+      if (!(node instanceof HTMLElement)) return
+      const line = Number(node.getAttribute('data-line'))
+      if (line <= reveal.line && line > bestLine) {
+        bestLine = line
+        best = node
+      }
+    })
+    if (best === null) return
+    const el: HTMLElement = best
+    const scroll = scrollRef.current
+    if (scroll !== null) {
+      const eRect = el.getBoundingClientRect()
+      const sRect = scroll.getBoundingClientRect()
+      scroll.scrollTop += eRect.top - sRect.top - scroll.clientHeight * 0.35
+    }
+    el.classList.add('el--reveal')
+    const timer = window.setTimeout(() => el.classList.remove('el--reveal'), 1200)
+    return () => window.clearTimeout(timer)
+  }, [reveal])
+
   // Scroll a comment's anchored text into view.
   const focusComment = (c: Comment) => {
     const el = pagesRef.current?.querySelector(`.el[data-line="${c.startLine}"]`)
-    if (el instanceof HTMLElement) {
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    const scroll = scrollRef.current
+    if (el instanceof HTMLElement && scroll !== null) {
+      const eRect = el.getBoundingClientRect()
+      const sRect = scroll.getBoundingClientRect()
+      scroll.scrollTop += eRect.top - sRect.top - scroll.clientHeight * 0.35
     }
   }
 
@@ -493,6 +540,14 @@ export function Preview({
           />
           <span className="preview__zoom-value">{Math.round(zoom)}%</span>
         </label>
+        <button
+          type="button"
+          className="preview__zoom-fit"
+          onClick={fitZoom}
+          title="Fit the page width to the pane"
+        >
+          Fit
+        </button>
       </div>
       <div className="preview__body">
         <div className="preview__scroll" ref={scrollRef}>

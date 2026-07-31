@@ -66,9 +66,7 @@ export function FileNav({
   return (
     <aside className="filenav">
       <div className="filenav__header">
-        <span className="filenav__folder" title={folderName}>
-          <span aria-hidden="true">📁</span> {folderName}
-        </span>
+        <span className="filenav__brand">lick screenwriting</span>
         <button
           type="button"
           className="filenav__icon-btn"
@@ -110,12 +108,16 @@ export function FileNav({
       </div>
 
       <div className="filenav__tree">
+        <div className="tree__root" title={folderName}>
+          <span aria-hidden="true">📁</span> {folderName}
+        </div>
         {loading ? (
           <p className="filenav__msg">Loading…</p>
         ) : scripts.length === 0 ? (
           <p className="filenav__msg">No scripts yet. Create one above.</p>
         ) : (
-          scripts.map((script) => {
+          <div className="tree__children">
+          {scripts.map((script) => {
             const expanded = expandedScripts.has(script.id)
             const files = versionsByScript[script.id] ?? []
             const versions = parseVersions(files)
@@ -198,7 +200,8 @@ export function FileNav({
                 )}
               </div>
             )
-          })
+          })}
+          </div>
         )}
       </div>
     </aside>

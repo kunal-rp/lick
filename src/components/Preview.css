@@ -50,6 +50,22 @@
   font-variant-numeric: tabular-nums;
 }
 
+.preview__zoom-fit {
+  padding: 3px 10px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: transparent;
+  color: #ccc;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.preview__zoom-fit:hover {
+  background: #333;
+  color: #fff;
+}
+
 /* Scales the rendered sheets only (the measurer lives outside this wrapper). */
 .preview__pages {
   zoom: var(--preview-zoom, 1);
@@ -65,6 +81,24 @@
 ::highlight(comments) {
   background: rgba(160, 100, 58, 0.25);
   color: #1a1a1a;
+}
+
+/* Brief flash when the editor reveals a line in the preview. */
+.el--reveal {
+  animation: preview-reveal 1.2s ease;
+  border-radius: 2px;
+}
+
+@keyframes preview-reveal {
+  0%,
+  40% {
+    background: rgba(160, 100, 58, 0.28);
+    box-shadow: 0 0 0 3px rgba(160, 100, 58, 0.28);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
 }
 
 /* Pages on the left, comments rail on the right. */
