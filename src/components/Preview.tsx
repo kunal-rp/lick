@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { parse, renderEmphasis } from '../fountain'
 import { LINES_PER_PAGE } from '../pagination'
+import { CommentsRail } from './CommentsRail'
+import type { Comment, CommentAnchor } from '../comments'
 import './Preview.css'
 
 interface PreviewProps {
@@ -10,6 +12,57 @@ interface PreviewProps {
   onPageBreaks?: (lines: number[]) => void
   /** Jump the editor to a source line when preview text is selected. */
   onJump?: (line: number) => void
+  /** Comments anchored to the version currently shown. */
+  comments?: Comment[]
+  /** The version id to anchor new comments to (null hides commenting). */
+  versionId?: string | null
+  /** Display name for comments with no explicit author. */
+  authorName?: string
+  onAddComment?: (anchor: CommentAnchor, text: string) => void
+  onEditComment?: (id: string, text: string) => void
+  onDeleteComment?: (id: string) => void
+}
+
+// Character offset of (node, nodeOffset) within root's flattened text, or the
+// total length if the node isn't inside root.
+function offsetWithin(root: HTMLElement, node: Node, nodeOffset: number): number {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let acc = 0
+  for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+    if (n === node) return acc + nodeOffset
+    acc += n.nodeValue?.length ?? 0
+  }
+  return acc
+}
+
+// {text node, local offset} for an absolute offset within root's text.
+function pointAt(
+  root: HTMLElement,
+  target: number,
+): { node: Node; offset: number } | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let acc = 0
+  for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+    const len = n.nodeValue?.length ?? 0
+    if (target <= acc + len) return { node: n, offset: target - acc }
+    acc += len
+  }
+  return null
+}
+
+// A DOM Range spanning [start, end] within an element's text, or null.
+function rangeWithinElement(
+  el: HTMLElement,
+  start: number,
+  end: number,
+): Range | null {
+  const a = pointAt(el, start)
+  const b = pointAt(el, end)
+  if (a === null || b === null) return null
+  const range = document.createRange()
+  range.setStart(a.node, a.offset)
+  range.setEnd(b.node, b.offset)
+  return range
 }
 
 // Preview magnification bounds, as percentages.
@@ -56,14 +109,36 @@ function buildRows(elements: ReturnType<typeof parse>['elements']): Row[] {
  *   - Fountain:   a `===` element forces an immediate break.
  * The source line of each break is reported so the editor can mark it.
  */
-export function Preview({ source, onPageBreaks, onJump }: PreviewProps) {
+export function Preview({
+  source,
+  onPageBreaks,
+  onJump,
+  comments = [],
+  versionId = null,
+  authorName = 'You',
+  onAddComment,
+  onEditComment,
+  onDeleteComment,
+}: PreviewProps) {
   const screenplay = useMemo(() => parse(source), [source])
   const rows = useMemo(() => buildRows(screenplay.elements), [screenplay])
   const measureRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const pagesRef = useRef<HTMLDivElement>(null)
   const reportedBreaks = useRef<string>('')
   // Each entry is a page: the indices (into `rows`) that land on it.
   const [pages, setPages] = useState<number[][]>([])
+
+  // A selection awaiting a comment: its anchor + vertical position for the
+  // floating "+ Comment" button. Cleared once composing or dismissed.
+  const [pending, setPending] = useState<{
+    anchor: CommentAnchor
+    top: number
+  } | null>(null)
+  // The anchor currently being composed (compose box open in the rail).
+  const [composeAnchor, setComposeAnchor] = useState<CommentAnchor | null>(null)
+
+  const commentingEnabled = versionId !== null && onAddComment !== undefined
 
   useLayoutEffect(() => {
     const container = measureRef.current
@@ -144,6 +219,62 @@ export function Preview({ source, onPageBreaks, onJump }: PreviewProps) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  // Highlight commented text (a light accent, distinct from the selection
+  // highlight) by registering each comment's range as a CSS custom highlight.
+  useEffect(() => {
+    const HighlightCtor = (window as unknown as { Highlight?: typeof Highlight })
+      .Highlight
+    const registry = (
+      CSS as unknown as { highlights?: Map<string, Highlight> }
+    ).highlights
+    if (HighlightCtor === undefined || registry === undefined) return
+    const container = pagesRef.current
+    const ranges: Range[] = []
+    if (container !== null) {
+      for (const c of comments) {
+        const el = container.querySelector(`.el[data-line="${c.line}"]`)
+        if (!(el instanceof HTMLElement)) continue
+        const range = rangeWithinElement(el, c.start, c.end)
+        if (range !== null) ranges.push(range)
+      }
+    }
+    if (ranges.length > 0) registry.set('comments', new HighlightCtor(...ranges))
+    else registry.delete('comments')
+  }, [comments, pages, source])
+
+  // The standard "insert comment" hotkey (⌘/Ctrl+Alt+M) opens the compose box
+  // for the pending selection.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.altKey &&
+        e.key.toLowerCase() === 'm' &&
+        pending !== null
+      ) {
+        e.preventDefault()
+        setComposeAnchor(pending.anchor)
+        setPending(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pending])
+
+  // Switching versions clears any in-progress comment affordances.
+  useEffect(() => {
+    setPending(null)
+    setComposeAnchor(null)
+  }, [versionId])
+
+  // Scroll a comment's anchored text into view.
+  const focusComment = (c: Comment) => {
+    const el = pagesRef.current?.querySelector(`.el[data-line="${c.line}"]`)
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+  }
+
   const isEmpty = screenplay.elements.length === 0
 
   const renderElement = (index: number) => {
@@ -164,21 +295,32 @@ export function Preview({ source, onPageBreaks, onJump }: PreviewProps) {
     )
   }
 
-  // Selecting (highlighting) any text in the preview jumps the editor to the
-  // source line where the selection begins. The editor takes focus (and the
-  // native selection) as it jumps, so the preview selection is re-registered as
-  // a CSS custom highlight to keep it visibly highlighted afterwards.
+  // Selecting (highlighting) text in the preview does two things: it jumps the
+  // editor to that line, and it primes a comment anchored to the selection
+  // (surfacing the floating "+ Comment" button). Because the editor takes focus
+  // and the native selection as it jumps, the preview selection is re-registered
+  // as a CSS custom highlight so it stays visibly highlighted.
   const handleSelectionJump = () => {
-    if (onJump === undefined) return
     const selection = window.getSelection()
     if (selection === null || selection.isCollapsed || selection.rangeCount === 0) {
       return
     }
-    const anchor = selection.anchorNode
-    const start =
-      anchor instanceof Element ? anchor : (anchor?.parentElement ?? null)
-    const el = start?.closest('.el[data-line]')
-    if (el === null || el === undefined) return
+    const node = selection.anchorNode
+    const startEl = (
+      node instanceof Element ? node : (node?.parentElement ?? null)
+    )?.closest('.el[data-line]')
+    if (!(startEl instanceof HTMLElement)) return
+
+    const range = selection.getRangeAt(0)
+    const line = Number(startEl.getAttribute('data-line'))
+    const text = startEl.textContent ?? ''
+    const start = offsetWithin(startEl, range.startContainer, range.startOffset)
+    // Anchor within the starting element; clamp the end to its text.
+    const end = Math.min(
+      Math.max(offsetWithin(startEl, range.endContainer, range.endOffset), start),
+      text.length,
+    )
+    const quote = text.slice(start, end)
 
     // Persist the preview highlight independently of the native selection.
     const HighlightCtor = (window as unknown as { Highlight?: typeof Highlight })
@@ -189,11 +331,23 @@ export function Preview({ source, onPageBreaks, onJump }: PreviewProps) {
     if (HighlightCtor !== undefined && registry !== undefined) {
       registry.set(
         'preview-selection',
-        new HighlightCtor(selection.getRangeAt(0).cloneRange()),
+        new HighlightCtor(range.cloneRange()),
       )
     }
 
-    onJump(Number(el.getAttribute('data-line')))
+    onJump?.(line)
+
+    if (commentingEnabled && versionId !== null && quote.trim() !== '') {
+      const scroll = scrollRef.current
+      const top =
+        scroll !== null
+          ? range.getBoundingClientRect().top -
+            scroll.getBoundingClientRect().top +
+            scroll.scrollTop
+          : 0
+      setComposeAnchor(null)
+      setPending({ anchor: { versionId, line, start, end, quote }, top })
+    }
   }
 
   const renderRow = (rowIndex: number) => {
@@ -271,37 +425,72 @@ export function Preview({ source, onPageBreaks, onJump }: PreviewProps) {
           <span className="preview__zoom-value">{Math.round(zoom)}%</span>
         </label>
       </div>
-      <div className="preview__scroll" ref={scrollRef}>
-        {/* Off-screen single-column layout, used only to measure heights.
-            Kept outside the zoom wrapper so pagination stays deterministic. */}
-        <div className="preview__measure" ref={measureRef} aria-hidden="true">
-          {rows.map(measureRow)}
+      <div className="preview__body">
+        <div className="preview__scroll" ref={scrollRef}>
+          {/* Off-screen single-column layout, used only to measure heights.
+              Kept outside the zoom wrapper so pagination stays deterministic. */}
+          <div className="preview__measure" ref={measureRef} aria-hidden="true">
+            {rows.map(measureRow)}
+          </div>
+
+          {/* `zoom` scales the rendered sheets only; it doesn't affect the
+              measurer's layout metrics, so page breaks are unchanged. */}
+          <div
+            className="preview__pages"
+            ref={pagesRef}
+            style={{ '--preview-zoom': zoom / 100 } as CSSProperties}
+            onMouseUp={handleSelectionJump}
+          >
+            {renderTitlePage()}
+
+            {isEmpty
+              ? screenplay.titlePage === null && (
+                  <div className="preview__page">
+                    <p className="preview__empty">Nothing to preview yet.</p>
+                  </div>
+                )
+              : pages.map((group, p) => (
+                  <div className="preview__page" key={p}>
+                    {p > 0 && (
+                      <span className="preview__page-number">{p + 1}.</span>
+                    )}
+                    {group.map(renderRow)}
+                  </div>
+                ))}
+          </div>
+
+          {/* Floating "add comment" button anchored to the current selection. */}
+          {commentingEnabled && pending !== null && composeAnchor === null && (
+            <button
+              type="button"
+              className="preview__comment-add"
+              style={{ top: pending.top }}
+              title="Add a comment (⌘/Ctrl+Alt+M)"
+              onClick={() => {
+                setComposeAnchor(pending.anchor)
+                setPending(null)
+              }}
+            >
+              ＋ Comment
+            </button>
+          )}
         </div>
 
-        {/* `zoom` scales the rendered sheets only; it doesn't affect the
-            measurer's layout metrics, so page breaks are unchanged. */}
-        <div
-          className="preview__pages"
-          style={{ '--preview-zoom': zoom / 100 } as CSSProperties}
-          onMouseUp={handleSelectionJump}
-        >
-          {renderTitlePage()}
-
-          {isEmpty
-            ? screenplay.titlePage === null && (
-                <div className="preview__page">
-                  <p className="preview__empty">Nothing to preview yet.</p>
-                </div>
-              )
-            : pages.map((group, p) => (
-                <div className="preview__page" key={p}>
-                  {p > 0 && (
-                    <span className="preview__page-number">{p + 1}.</span>
-                  )}
-                  {group.map(renderRow)}
-                </div>
-              ))}
-        </div>
+        {commentingEnabled && (comments.length > 0 || composeAnchor !== null) && (
+          <CommentsRail
+            comments={comments}
+            composeAnchor={composeAnchor}
+            authorName={authorName}
+            onCreate={(text) => {
+              if (composeAnchor !== null) onAddComment?.(composeAnchor, text)
+              setComposeAnchor(null)
+            }}
+            onCancelCompose={() => setComposeAnchor(null)}
+            onEdit={(id, text) => onEditComment?.(id, text)}
+            onDelete={(id) => onDeleteComment?.(id)}
+            onFocusComment={focusComment}
+          />
+        )}
       </div>
     </div>
   )

@@ -61,12 +61,48 @@
   color: #1a1a1a;
 }
 
+/* Commented text — a light accent, deliberately distinct from the selection. */
+::highlight(comments) {
+  background: rgba(160, 100, 58, 0.25);
+  color: #1a1a1a;
+}
+
+/* Pages on the left, comments rail on the right. */
+.preview__body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
 /* Fixed-size pages that scroll/centre — never reflow — as the pane resizes. */
 .preview__scroll {
   position: relative;
   flex: 1 1 auto;
+  min-width: 0;
   overflow: auto;
   padding: 24px;
+}
+
+/* Floating "add comment" button in the right margin of the page area. */
+.preview__comment-add {
+  position: absolute;
+  right: 10px;
+  z-index: 5;
+  padding: 4px 10px;
+  border: 1px solid #a0643a;
+  border-radius: 14px;
+  background: #2a2a2a;
+  color: #e0b48c;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.preview__comment-add:hover {
+  background: #a0643a;
+  color: #fff;
 }
 
 /*

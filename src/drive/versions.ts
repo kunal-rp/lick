@@ -1,4 +1,5 @@
 import type { DriveFile } from './files'
+import { COMMENTS_FILENAME } from '../comments'
 
 // Versions are files named `<script name>_v<N>.fountain` inside a script
 // folder. The number orders them; the highest is the most recent. Files that
@@ -28,10 +29,20 @@ export function isPdf(file: DriveFile): boolean {
   return file.mimeType === 'application/pdf' || /\.pdf$/i.test(file.name)
 }
 
+/** Whether a file is the script's comments store (data, not a version). */
+export function isCommentsFile(file: DriveFile): boolean {
+  return file.name === COMMENTS_FILENAME
+}
+
+/** Files that are neither PDF exports nor the comments store. */
+function isVersionFile(file: DriveFile): boolean {
+  return !isPdf(file) && !isCommentsFile(file)
+}
+
 /** Parse and order the editable version files, most recent first. */
 export function parseVersions(files: DriveFile[]): Version[] {
   const versions = files
-    .filter((file) => !isPdf(file))
+    .filter(isVersionFile)
     .map((file) => {
       const match = file.name.match(VERSION_RE)
       const number = match ? parseInt(match[1], 10) : 0

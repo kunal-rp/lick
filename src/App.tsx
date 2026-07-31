@@ -18,12 +18,21 @@ import {
   type DriveFile,
 } from './drive/files'
 import {
+  isCommentsFile,
   isPdf,
   nextVersionNumber,
   parseVersions,
   versionFileName,
 } from './drive/versions'
 import { buildScreenplayPdf } from './pdf'
+import {
+  COMMENTS_FILENAME,
+  makeComment,
+  parseComments,
+  serializeComments,
+  type Comment,
+  type CommentAnchor,
+} from './comments'
 import { useDriveAuth } from './drive/useDriveAuth'
 import { useWorkingFolder } from './drive/useWorkingFolder'
 import { loadLastOpened, saveLastOpened } from './lastOpened'
@@ -87,6 +96,10 @@ export default function App() {
   const [jump, setJump] = useState<{ line: number; nonce: number } | null>(null)
   const jumpToLine = (line: number) =>
     setJump((j) => ({ line, nonce: (j?.nonce ?? 0) + 1 }))
+
+  // Comments for the selected script (all versions), from its comments.json.
+  const [comments, setComments] = useState<Comment[]>([])
+  const commentsFileIdRef = useRef<string | null>(null)
   // True while a create/rename/new-version Drive write is in flight.
   const [busy, setBusy] = useState(false)
   // Last Drive-operation error message, shown to the user.
@@ -256,6 +269,71 @@ export default function App() {
       active = false
     }
   }, [selectedVersionId, versionsByScript])
+
+  // Load the selected script's comments (a single comments.json for all its
+  // versions), and remember the file id for later writes.
+  useEffect(() => {
+    if (selectedScriptId === null) {
+      setComments([])
+      commentsFileIdRef.current = null
+      return
+    }
+    const file = (versionsByScript[selectedScriptId] ?? []).find(isCommentsFile)
+    commentsFileIdRef.current = file?.id ?? null
+    if (file === undefined) {
+      setComments([])
+      return
+    }
+    let active = true
+    readFile(file)
+      .then((text) => {
+        if (active) setComments(parseComments(text))
+      })
+      .catch((err) => {
+        console.error('[comments] read failed:', err)
+        if (active) setComments([])
+      })
+    return () => {
+      active = false
+    }
+  }, [selectedScriptId, versionsByScript])
+
+  // Write the comments array to the script's comments.json (creating it the
+  // first time), then apply it to state.
+  async function persistComments(scriptId: string, next: Comment[]) {
+    setComments(next)
+    const json = serializeComments(next)
+    const fileId = commentsFileIdRef.current
+    if (fileId !== null) {
+      await updateFileContent(fileId, json)
+    } else {
+      const created = await createFile(scriptId, COMMENTS_FILENAME, json)
+      commentsFileIdRef.current = created.id
+      const refreshed = await listFiles(scriptId)
+      setVersionsByScript((prev) => ({ ...prev, [scriptId]: refreshed }))
+    }
+  }
+
+  function addComment(anchor: CommentAnchor, text: string) {
+    if (selectedScriptId === null) return
+    const scriptId = selectedScriptId
+    const next = [...comments, makeComment(anchor, null, text, Date.now())]
+    void run('Save comment', () => persistComments(scriptId, next))
+  }
+
+  function editComment(id: string, text: string) {
+    if (selectedScriptId === null) return
+    const scriptId = selectedScriptId
+    const next = comments.map((c) => (c.id === id ? { ...c, text } : c))
+    void run('Edit comment', () => persistComments(scriptId, next))
+  }
+
+  function deleteComment(id: string) {
+    if (selectedScriptId === null) return
+    const scriptId = selectedScriptId
+    const next = comments.filter((c) => c.id !== id)
+    void run('Delete comment', () => persistComments(scriptId, next))
+  }
 
   // Background auto-save: on each edit, save immediately once enough changes
   // have piled up or too long has passed since the last save; otherwise save
@@ -564,6 +642,13 @@ export default function App() {
                             source={source}
                             onPageBreaks={setPageBreakLines}
                             onJump={jumpToLine}
+                            versionId={selectedVersionId}
+                            comments={comments.filter(
+                              (c) => c.versionId === selectedVersionId,
+                            )}
+                            onAddComment={addComment}
+                            onEditComment={editComment}
+                            onDeleteComment={deleteComment}
                           />
                         </div>
                         <InsightsPanel
