@@ -475,8 +475,8 @@ export default function App() {
               onNewVersion={newVersion}
             />
             <div className="workspace__editor">
-              <SplitPane
-                left={
+              {(() => {
+                const editorNode = (
                   <Editor
                     key={selectedVersionId}
                     initialValue={content}
@@ -505,26 +505,28 @@ export default function App() {
                       },
                     ]}
                   />
-                }
-                right={
-                  <div className="rightstack">
-                    {showPreview && (
-                      <div className="rightstack__preview">
-                        <Preview
-                          source={source}
-                          onPageBreaks={setPageBreakLines}
-                          onJump={jumpToLine}
-                        />
+                )
+                // The Characters & Locations panel only accompanies the
+                // preview, so with the preview hidden the editor fills the pane.
+                if (!showPreview) return editorNode
+                return (
+                  <SplitPane
+                    left={editorNode}
+                    right={
+                      <div className="rightstack">
+                        <div className="rightstack__preview">
+                          <Preview
+                            source={source}
+                            onPageBreaks={setPageBreakLines}
+                            onJump={jumpToLine}
+                          />
+                        </div>
+                        <InsightsPanel source={source} onJump={jumpToLine} />
                       </div>
-                    )}
-                    <InsightsPanel
-                      source={source}
-                      grow={!showPreview}
-                      onJump={jumpToLine}
-                    />
-                  </div>
-                }
-              />
+                    }
+                  />
+                )
+              })()}
             </div>
           </>
         )}

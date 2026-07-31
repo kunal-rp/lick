@@ -8,7 +8,7 @@ interface PreviewProps {
   source: string
   /** Reports the source line index where each page break falls (in order). */
   onPageBreaks?: (lines: number[]) => void
-  /** Jump the editor to a source line when a preview element is double-clicked. */
+  /** Jump the editor to a source line when preview text is selected. */
   onJump?: (line: number) => void
 }
 
@@ -156,13 +156,44 @@ export function Preview({ source, onPageBreaks, onJump }: PreviewProps) {
       <p
         key={index}
         data-type={el.type}
+        data-line={el.line}
         className={`el el--${el.type}`}
-        title="Double-click to jump to this line in the editor"
-        onDoubleClick={() => onJump?.(el.line)}
       >
         {renderEmphasis(el.text)}
       </p>
     )
+  }
+
+  // Selecting (highlighting) any text in the preview jumps the editor to the
+  // source line where the selection begins. The editor takes focus (and the
+  // native selection) as it jumps, so the preview selection is re-registered as
+  // a CSS custom highlight to keep it visibly highlighted afterwards.
+  const handleSelectionJump = () => {
+    if (onJump === undefined) return
+    const selection = window.getSelection()
+    if (selection === null || selection.isCollapsed || selection.rangeCount === 0) {
+      return
+    }
+    const anchor = selection.anchorNode
+    const start =
+      anchor instanceof Element ? anchor : (anchor?.parentElement ?? null)
+    const el = start?.closest('.el[data-line]')
+    if (el === null || el === undefined) return
+
+    // Persist the preview highlight independently of the native selection.
+    const HighlightCtor = (window as unknown as { Highlight?: typeof Highlight })
+      .Highlight
+    const registry = (
+      CSS as unknown as { highlights?: Map<string, Highlight> }
+    ).highlights
+    if (HighlightCtor !== undefined && registry !== undefined) {
+      registry.set(
+        'preview-selection',
+        new HighlightCtor(selection.getRangeAt(0).cloneRange()),
+      )
+    }
+
+    onJump(Number(el.getAttribute('data-line')))
   }
 
   const renderRow = (rowIndex: number) => {
@@ -252,6 +283,7 @@ export function Preview({ source, onPageBreaks, onJump }: PreviewProps) {
         <div
           className="preview__pages"
           style={{ '--preview-zoom': zoom / 100 } as CSSProperties}
+          onMouseUp={handleSelectionJump}
         >
           {renderTitlePage()}
 

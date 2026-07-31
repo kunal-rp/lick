@@ -55,6 +55,12 @@
   zoom: var(--preview-zoom, 1);
 }
 
+/* Persisted preview selection — kept visible after the editor takes focus. */
+::highlight(preview-selection) {
+  background: #ffe08a;
+  color: #1a1a1a;
+}
+
 /* Fixed-size pages that scroll/centre — never reflow — as the pane resizes. */
 .preview__scroll {
   position: relative;
