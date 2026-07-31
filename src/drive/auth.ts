@@ -1,21 +1,21 @@
 // Google Drive OAuth via Google Identity Services (loaded in index.html).
 //
 // Access tokens are short-lived and browser-side OAuth has no refresh token.
-// To keep the user signed in across reloads WITHOUT a popup on every load, we
-// cache the current token + expiry in sessionStorage (per-tab, cleared when the
-// tab closes — not long-term, and not localStorage). On reload a still-valid
-// cached token is reused directly with no GIS round-trip and no popup; only
-// when it has actually expired do we fall back to a silent re-acquire
-// (requestAccessToken with prompt: ''), which briefly flashes a popup because
-// GIS has no invisible refresh. A separate non-sensitive "granted" flag records
-// that consent was given, so we know a silent restore is worth attempting.
+// To keep the user signed in across reloads AND new tabs WITHOUT a popup, we
+// cache the current token + expiry in localStorage. It's shared across tabs, so
+// opening a new tab reuses a still-valid token directly — no GIS round-trip and
+// no popup — exactly like a reload. Only when the token has actually expired do
+// we fall back to a silent re-acquire (requestAccessToken with prompt: ''),
+// which briefly flashes a popup because GIS has no invisible refresh. A separate
+// "granted" flag records that consent was given, so we know a silent restore is
+// worth attempting. The cached token is short-lived and cleared on sign-out.
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 const SCOPE = 'https://www.googleapis.com/auth/drive'
 // Renew a bit before the real expiry to avoid using a token that dies mid-flight.
 const EXPIRY_SKEW_MS = 60_000
 const GRANTED_KEY = 'lick.drive-granted' // localStorage — consent-given flag
-const TOKEN_KEY = 'lick.drive-token' // sessionStorage — token + expiry cache
+const TOKEN_KEY = 'lick.drive-token' // localStorage — token + expiry cache (shared across tabs)
 
 interface TokenClient {
   requestAccessToken: (overrides?: { prompt?: string }) => void
@@ -26,10 +26,14 @@ let accessToken: string | null = null
 let expiresAt = 0 // epoch ms
 // Resolver for the request currently awaiting the GIS callback.
 let pending: ((token: string | null) => void) | null = null
+// A silent renew in progress, so concurrent callers coalesce onto one request
+// (the GIS callback settles a single shared `pending`; overlapping requests
+// would otherwise clobber it and leave a caller hanging until timeout).
+let inflightRenew: Promise<string | null> | null = null
 
 function saveStoredToken(): void {
   try {
-    sessionStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken, expiresAt }))
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken, expiresAt }))
   } catch {
     // Storage unavailable — reloads will just re-acquire silently.
   }
@@ -37,7 +41,7 @@ function saveStoredToken(): void {
 
 function clearStoredToken(): void {
   try {
-    sessionStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_KEY)
   } catch {
     // ignore
   }
@@ -45,7 +49,7 @@ function clearStoredToken(): void {
 
 function loadStoredToken(): void {
   try {
-    const raw = sessionStorage.getItem(TOKEN_KEY)
+    const raw = localStorage.getItem(TOKEN_KEY)
     if (raw === null) return
     const parsed = JSON.parse(raw) as { accessToken?: unknown; expiresAt?: unknown }
     if (
@@ -201,7 +205,11 @@ export function signIn(): Promise<string | null> {
  */
 export async function getValidToken(): Promise<string | null> {
   if (isValid()) return accessToken
-  return request('', 8000)
+  if (inflightRenew !== null) return inflightRenew
+  inflightRenew = request('', 8000).finally(() => {
+    inflightRenew = null
+  })
+  return inflightRenew
 }
 
 /**

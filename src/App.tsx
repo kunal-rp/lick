@@ -27,6 +27,7 @@ import { buildScreenplayPdf } from './pdf'
 import { useDriveAuth } from './drive/useDriveAuth'
 import { useWorkingFolder } from './drive/useWorkingFolder'
 import { loadLastOpened, saveLastOpened } from './lastOpened'
+import { loadLayout, saveLayout } from './layout'
 import { loadTheme, saveTheme, type Theme } from './theme'
 import './App.css'
 
@@ -73,12 +74,14 @@ export default function App() {
   // dashed guide at each so the writer sees page boundaries in context.
   const [pageBreakLines, setPageBreakLines] = useState<number[]>([])
 
-  const [navCollapsed, setNavCollapsed] = useState(false)
+  // Saved panel layout (which panels are open + sizes), restored on load.
+  const layoutRef = useRef(loadLayout())
+  const [navCollapsed, setNavCollapsed] = useState(layoutRef.current.navCollapsed)
   // Light/dark theme, applied to <html> as data-theme and persisted.
   const [theme, setTheme] = useState<Theme>(loadTheme)
   // Whether the preview is shown (toggled from the editor toolbar). The
-  // Characters & Locations panel is always present below it (collapsible).
-  const [showPreview, setShowPreview] = useState(true)
+  // Characters & Locations panel accompanies it (collapsible).
+  const [showPreview, setShowPreview] = useState(layoutRef.current.showPreview)
   // Jump-to-line request forwarded to the editor; the nonce lets the same
   // line re-fire on repeated clicks.
   const [jump, setJump] = useState<{ line: number; nonce: number } | null>(null)
@@ -117,10 +120,12 @@ export default function App() {
   )
   const dirty = content !== null && source !== content
 
-  // Load the whole tree whenever the working folder changes; auto-select the
-  // first script and its most recent version.
+  // Load the whole tree once signed in and a folder is chosen; auto-select the
+  // first script and its most recent version. Gated on auth so a restored
+  // folder can't trigger Drive calls before the token is ready (e.g. in a new
+  // tab), which would fail with an auth error.
   useEffect(() => {
-    if (folderId === null) return
+    if (folderId === null || auth.status !== 'signed-in') return
     let active = true
     setTreeLoading(true)
     loadTree(folderId)
@@ -168,13 +173,20 @@ export default function App() {
     return () => {
       active = false
     }
-  }, [folderId])
+  }, [folderId, auth.status])
 
   // Apply and persist the theme.
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     saveTheme(theme)
   }, [theme])
+
+  // Persist which panels are open as they change.
+  useEffect(() => {
+    layoutRef.current.showPreview = showPreview
+    layoutRef.current.navCollapsed = navCollapsed
+    saveLayout(layoutRef.current)
+  }, [showPreview, navCollapsed])
 
   // Track the selected version for the async-save guard.
   useEffect(() => {
@@ -540,6 +552,11 @@ export default function App() {
                 return (
                   <SplitPane
                     left={editorNode}
+                    initialLeftPercent={layoutRef.current.splitLeftPercent}
+                    onResize={(pct) => {
+                      layoutRef.current.splitLeftPercent = pct
+                      saveLayout(layoutRef.current)
+                    }}
                     right={
                       <div className="rightstack">
                         <div className="rightstack__preview">
@@ -549,7 +566,15 @@ export default function App() {
                             onJump={jumpToLine}
                           />
                         </div>
-                        <InsightsPanel source={source} onJump={jumpToLine} />
+                        <InsightsPanel
+                          source={source}
+                          onJump={jumpToLine}
+                          initialCollapsed={layoutRef.current.insightsCollapsed}
+                          onCollapsedChange={(collapsed) => {
+                            layoutRef.current.insightsCollapsed = collapsed
+                            saveLayout(layoutRef.current)
+                          }}
+                        />
                       </div>
                     }
                   />

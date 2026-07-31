@@ -8,6 +8,10 @@ interface InsightsPanelProps {
   grow?: boolean
   /** Jump the editor to a source line when a reference is clicked. */
   onJump?: (line: number) => void
+  /** Initial collapsed state (restored from saved layout). */
+  initialCollapsed?: boolean
+  /** Reports the collapsed state when the user toggles it. */
+  onCollapsedChange?: (collapsed: boolean) => void
 }
 
 /**
@@ -19,12 +23,14 @@ export function InsightsPanel({
   source,
   grow = false,
   onJump,
+  initialCollapsed = false,
+  onCollapsedChange,
 }: InsightsPanelProps) {
   const { characters, locations } = useMemo(
     () => analyzeScript(source),
     [source],
   )
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(initialCollapsed)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const toggle = (key: string) =>
@@ -44,7 +50,10 @@ export function InsightsPanel({
       <button
         type="button"
         className="insights__bar"
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => {
+          setCollapsed((c) => !c)
+          onCollapsedChange?.(!collapsed)
+        }}
         aria-expanded={!collapsed}
       >
         <span className="insights__chevron">{collapsed ? '▸' : '▾'}</span>
