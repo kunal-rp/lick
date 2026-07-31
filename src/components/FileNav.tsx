@@ -1,5 +1,5 @@
 import type { DriveFile } from '../drive/files'
-import { parseVersions } from '../drive/versions'
+import { listPdfs, parseVersions } from '../drive/versions'
 import type { Theme } from '../theme'
 import './FileNav.css'
 
@@ -117,7 +117,9 @@ export function FileNav({
         ) : (
           scripts.map((script) => {
             const expanded = expandedScripts.has(script.id)
-            const versions = parseVersions(versionsByScript[script.id] ?? [])
+            const files = versionsByScript[script.id] ?? []
+            const versions = parseVersions(files)
+            const pdfs = listPdfs(files)
             const latestId = versions[0]?.file.id ?? null
             return (
               <div key={script.id} className="tree__script">
@@ -177,6 +179,21 @@ export function FileNav({
                         </div>
                       ))
                     )}
+
+                    {/* PDF exports: listed for reference, not selectable. */}
+                    {pdfs.map((p) => (
+                      <div
+                        key={p.file.id}
+                        className="tree__pdf-row"
+                        title={p.file.name}
+                        aria-disabled="true"
+                      >
+                        <span className="tree__pdf">
+                          <span aria-hidden="true">📕</span> {p.label}
+                        </span>
+                        <span className="tree__pdf-tag">PDF</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

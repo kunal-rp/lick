@@ -6,20 +6,24 @@ import { SplitPane } from './components/SplitPane'
 import { FileNav } from './components/FileNav'
 import { VersionBar } from './components/VersionBar'
 import {
+  createBinaryFile,
   createFile,
   createFolder,
   listFiles,
   listFolders,
   readFile,
   trashFile,
+  updateBinaryFileContent,
   updateFileContent,
   type DriveFile,
 } from './drive/files'
 import {
+  isPdf,
   nextVersionNumber,
   parseVersions,
   versionFileName,
 } from './drive/versions'
+import { buildScreenplayPdf } from './pdf'
 import { useDriveAuth } from './drive/useDriveAuth'
 import { useWorkingFolder } from './drive/useWorkingFolder'
 import { loadLastOpened, saveLastOpened } from './lastOpened'
@@ -384,6 +388,29 @@ export default function App() {
     })
   }
 
+  // Render the current preview to a PDF and store it beside the versions,
+  // named to match the current version file (e.g. Script_v3.fountain →
+  // Script_v3.pdf). Overwrites an existing PDF for that version.
+  function exportPdf() {
+    if (selectedScriptId === null || selectedVersionId === null) return
+    const scriptId = selectedScriptId
+    const files = versionsByScript[scriptId] ?? []
+    const versionFile = files.find((f) => f.id === selectedVersionId)
+    if (versionFile === undefined) return
+    const pdfName = versionFile.name.replace(/\.fountain$/i, '') + '.pdf'
+    void run('Export PDF', async () => {
+      const bytes = await buildScreenplayPdf(source)
+      const existing = files.find((f) => isPdf(f) && f.name === pdfName)
+      if (existing !== undefined) {
+        await updateBinaryFileContent(existing.id, bytes, 'application/pdf')
+      } else {
+        await createBinaryFile(scriptId, pdfName, bytes, 'application/pdf')
+      }
+      const refreshed = await listFiles(scriptId)
+      setVersionsByScript((prev) => ({ ...prev, [scriptId]: refreshed }))
+    })
+  }
+
   if (auth.status === 'restoring') {
     return (
       <div className="signin">
@@ -473,6 +500,7 @@ export default function App() {
               }
               onSave={() => void persist()}
               onNewVersion={newVersion}
+              onExportPdf={exportPdf}
             />
             <div className="workspace__editor">
               {(() => {

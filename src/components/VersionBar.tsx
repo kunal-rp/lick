@@ -13,6 +13,7 @@ interface VersionBarProps {
   onSelectVersion: (fileId: string) => void
   onSave: () => void
   onNewVersion: () => void
+  onExportPdf: () => void
 }
 
 /** Top bar over the editor: current script, version selector, save/new version. */
@@ -27,6 +28,7 @@ export function VersionBar({
   onSelectVersion,
   onSave,
   onNewVersion,
+  onExportPdf,
 }: VersionBarProps) {
   const saveLabel = saving ? 'Saving…' : dirty ? 'Save' : 'Saved'
   const savedTime =
@@ -77,6 +79,15 @@ export function VersionBar({
         title="Auto-saves in the background; ⌘/Ctrl+S or click to save now"
       >
         {saveLabel}
+      </button>
+      <button
+        type="button"
+        className="verbar__btn"
+        onClick={onExportPdf}
+        disabled={busy || saving}
+        title="Render the current preview to a PDF, stored beside the versions"
+      >
+        Export PDF
       </button>
       <button
         type="button"

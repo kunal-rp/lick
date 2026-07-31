@@ -108,6 +108,63 @@ export async function createFile(
   return (await res.json()) as DriveFile
 }
 
+/** Base64-encode bytes in chunks (avoids call-stack limits on large inputs). */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
+/** Create a binary file (e.g. a PDF export) in a folder, and return it. */
+export async function createBinaryFile(
+  parentId: string,
+  name: string,
+  bytes: Uint8Array,
+  mimeType: string,
+): Promise<DriveFile> {
+  const boundary = `lick${Math.random().toString(36).slice(2)}`
+  const metadata = { name, parents: [parentId], mimeType }
+  const body =
+    `--${boundary}\r\n` +
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    `${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: ${mimeType}\r\n` +
+    'Content-Transfer-Encoding: base64\r\n\r\n' +
+    `${bytesToBase64(bytes)}\r\n` +
+    `--${boundary}--`
+  const res = await fetch(
+    `${UPLOAD}/files?uploadType=multipart&fields=id,name,mimeType`,
+    {
+      method: 'POST',
+      headers: {
+        ...(await authHeaders()),
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    },
+  )
+  if (!res.ok) throw new Error(`Drive create file failed (${res.status})`)
+  return (await res.json()) as DriveFile
+}
+
+/** Overwrite an existing file's contents with binary data. */
+export async function updateBinaryFileContent(
+  fileId: string,
+  bytes: Uint8Array,
+  mimeType: string,
+): Promise<void> {
+  const res = await fetch(`${UPLOAD}/files/${fileId}?uploadType=media`, {
+    method: 'PATCH',
+    headers: { ...(await authHeaders()), 'Content-Type': mimeType },
+    body: bytes as BodyInit,
+  })
+  if (!res.ok) throw new Error(`Drive save failed (${res.status})`)
+}
+
 /** Overwrite a file's contents. */
 export async function updateFileContent(
   fileId: string,
