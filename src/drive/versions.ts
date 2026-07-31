@@ -39,6 +39,16 @@ export function nextVersionNumber(files: DriveFile[]): number {
   return max + 1
 }
 
+// Normalize a script name for use in a filename: drop punctuation and turn
+// runs of whitespace into single underscores.
+function slugifyScriptName(scriptName: string): string {
+  const slug = scriptName
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/[^\w]/g, '')
+  return slug || 'script'
+}
+
 export function versionFileName(scriptName: string, n: number): string {
-  return `${scriptName}_v${n}.fountain`
+  return `${slugifyScriptName(scriptName)}_v${n}.fountain`
 }
