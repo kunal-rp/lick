@@ -10,15 +10,19 @@
 
 export const COMMENTS_FILENAME = 'comments.json'
 
-/** Where a comment is anchored: a version and a range within one element. */
+/**
+ * Where a comment is anchored: a version and a text range that may span
+ * multiple preview elements — from (startLine, startOffset) to
+ * (endLine, endOffset), where each line is an element's source line and each
+ * offset is a character offset within that element's rendered text.
+ */
 export interface CommentAnchor {
   /** Drive file id of the version the comment belongs to. */
   versionId: string
-  /** Source line of the anchored preview element. */
-  line: number
-  /** Character range within that element's rendered text. */
-  start: number
-  end: number
+  startLine: number
+  startOffset: number
+  endLine: number
+  endOffset: number
   /** The highlighted text, kept for display and re-anchoring. */
   quote: string
 }
@@ -39,11 +43,12 @@ export interface Comment extends CommentAnchor {
 /** Compact hash of a version id + location range (djb2, base36). */
 export function locationHash(
   versionId: string,
-  line: number,
-  start: number,
-  end: number,
+  startLine: number,
+  startOffset: number,
+  endLine: number,
+  endOffset: number,
 ): string {
-  const key = `${versionId}|${line}|${start}|${end}`
+  const key = `${versionId}|${startLine}:${startOffset}|${endLine}:${endOffset}`
   let h = 5381
   for (let i = 0; i < key.length; i++) {
     h = ((h << 5) + h + key.charCodeAt(i)) | 0
@@ -58,7 +63,13 @@ export function makeComment(
   text: string,
   now: number,
 ): Comment {
-  const hash = locationHash(anchor.versionId, anchor.line, anchor.start, anchor.end)
+  const hash = locationHash(
+    anchor.versionId,
+    anchor.startLine,
+    anchor.startOffset,
+    anchor.endLine,
+    anchor.endOffset,
+  )
   return {
     ...anchor,
     id: `${hash}-${now.toString(36)}`,
@@ -74,22 +85,63 @@ interface CommentFile {
   comments: Comment[]
 }
 
+// Legacy single-element anchor shape ({ line, start, end }), migrated on read.
+interface LegacyComment {
+  line?: number
+  start?: number
+  end?: number
+}
+
 /** Parse the comments file content; tolerant of missing/corrupt data. */
 export function parseComments(json: string): Comment[] {
   try {
     const data = JSON.parse(json) as Partial<CommentFile>
     if (!Array.isArray(data.comments)) return []
-    return data.comments.filter(
-      (c): c is Comment =>
-        c !== null &&
-        typeof c === 'object' &&
-        typeof (c as Comment).id === 'string' &&
-        typeof (c as Comment).versionId === 'string' &&
-        typeof (c as Comment).line === 'number' &&
-        typeof (c as Comment).start === 'number' &&
-        typeof (c as Comment).end === 'number' &&
-        typeof (c as Comment).text === 'string',
-    )
+    const out: Comment[] = []
+    for (const raw of data.comments as unknown[]) {
+      if (raw === null || typeof raw !== 'object') continue
+      const c = raw as Comment & LegacyComment
+      if (
+        typeof c.id !== 'string' ||
+        typeof c.versionId !== 'string' ||
+        typeof c.text !== 'string'
+      ) {
+        continue
+      }
+      // New (multi-line) shape, falling back to the legacy single-line fields.
+      const startLine =
+        typeof c.startLine === 'number' ? c.startLine : c.line
+      const startOffset =
+        typeof c.startOffset === 'number' ? c.startOffset : c.start
+      const endLine = typeof c.endLine === 'number' ? c.endLine : c.line
+      const endOffset =
+        typeof c.endOffset === 'number' ? c.endOffset : c.end
+      if (
+        typeof startLine !== 'number' ||
+        typeof startOffset !== 'number' ||
+        typeof endLine !== 'number' ||
+        typeof endOffset !== 'number'
+      ) {
+        continue
+      }
+      out.push({
+        id: c.id,
+        versionId: c.versionId,
+        startLine,
+        startOffset,
+        endLine,
+        endOffset,
+        quote: typeof c.quote === 'string' ? c.quote : '',
+        locationHash:
+          typeof c.locationHash === 'string'
+            ? c.locationHash
+            : locationHash(c.versionId, startLine, startOffset, endLine, endOffset),
+        author: typeof c.author === 'string' ? c.author : null,
+        text: c.text,
+        createdAt: typeof c.createdAt === 'number' ? c.createdAt : 0,
+      })
+    }
+    return out
   } catch {
     return []
   }

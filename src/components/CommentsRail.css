@@ -48,6 +48,48 @@
   border-color: #a0643a;
 }
 
+/* Brief highlight when a comment is focused from the preview. */
+.comments__card--flash {
+  animation: comment-flash 1.2s ease;
+}
+
+@keyframes comment-flash {
+  0%,
+  40% {
+    border-color: #c47a4a;
+    box-shadow: 0 0 0 2px rgba(196, 122, 74, 0.5);
+  }
+  100% {
+    border-color: #383838;
+    box-shadow: none;
+  }
+}
+
+/* A comment whose anchored text no longer matches the current version. */
+.comments__card--broken {
+  border-color: #7a5a2a;
+  border-left: 3px solid #c98a3a;
+  opacity: 0.85;
+}
+
+.comments__broken-tag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(201, 138, 58, 0.18);
+  color: #e0b06a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* Broken comments can't point at live text — de-emphasize the quote. */
+.comments__card--broken .comments__quote {
+  text-decoration: line-through;
+  color: #8a7a6a;
+}
+
 .comments__card-head {
   display: flex;
   align-items: center;

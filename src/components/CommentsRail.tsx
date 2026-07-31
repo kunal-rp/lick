@@ -4,6 +4,10 @@ import './CommentsRail.css'
 
 interface CommentsRailProps {
   comments: Comment[]
+  /** Ids of comments whose anchor no longer resolves in the current text. */
+  brokenIds: Set<string>
+  /** A comment to scroll to and flash (e.g. selecting its text in preview). */
+  focus: { id: string; nonce: number } | null
   /** Anchor currently being commented on (shows the compose box), or null. */
   composeAnchor: CommentAnchor | null
   /** Display name for comments with no explicit author. */
@@ -18,6 +22,8 @@ interface CommentsRailProps {
 
 export function CommentsRail({
   comments,
+  brokenIds,
+  focus,
   composeAnchor,
   authorName,
   onCreate,
@@ -26,10 +32,28 @@ export function CommentsRail({
   onDelete,
   onFocusComment,
 }: CommentsRailProps) {
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // Scroll a focused comment into view and briefly flash it.
+  useEffect(() => {
+    if (focus === null || listRef.current === null) return
+    const card = listRef.current.querySelector<HTMLElement>(
+      `[data-comment-id="${focus.id}"]`,
+    )
+    if (card === null) return
+    card.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    card.classList.add('comments__card--flash')
+    const timer = window.setTimeout(
+      () => card.classList.remove('comments__card--flash'),
+      1200,
+    )
+    return () => window.clearTimeout(timer)
+  }, [focus])
+
   return (
     <aside className="comments" aria-label="Comments">
       <div className="comments__header">Comments</div>
-      <div className="comments__list">
+      <div className="comments__list" ref={listRef}>
         {composeAnchor !== null && (
           <Compose
             anchor={composeAnchor}
@@ -46,6 +70,7 @@ export function CommentsRail({
             <Card
               key={c.id}
               comment={c}
+              broken={brokenIds.has(c.id)}
               authorName={authorName}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -109,12 +134,14 @@ function Compose({
 
 function Card({
   comment,
+  broken,
   authorName,
   onEdit,
   onDelete,
   onFocus,
 }: {
   comment: Comment
+  broken: boolean
   authorName: string
   onEdit: (id: string, text: string) => void
   onDelete: (id: string) => void
@@ -133,7 +160,10 @@ function Card({
   }
 
   return (
-    <div className="comments__card">
+    <div
+      className={`comments__card${broken ? ' comments__card--broken' : ''}`}
+      data-comment-id={comment.id}
+    >
       <div className="comments__card-head">
         <button
           type="button"
@@ -145,6 +175,14 @@ function Card({
           {collapsed ? '▸' : '▾'}
         </button>
         <span className="comments__author">{author}</span>
+        {broken && (
+          <span
+            className="comments__broken-tag"
+            title="The text this comment referred to has changed or no longer exists in this version."
+          >
+            ⚠ Broken
+          </span>
+        )}
         {!editing && (
           <span className="comments__card-actions">
             <button

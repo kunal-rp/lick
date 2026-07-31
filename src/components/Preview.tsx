@@ -50,19 +50,12 @@ function pointAt(
   return null
 }
 
-// A DOM Range spanning [start, end] within an element's text, or null.
-function rangeWithinElement(
-  el: HTMLElement,
-  start: number,
-  end: number,
-): Range | null {
-  const a = pointAt(el, start)
-  const b = pointAt(el, end)
-  if (a === null || b === null) return null
-  const range = document.createRange()
-  range.setStart(a.node, a.offset)
-  range.setEnd(b.node, b.offset)
-  return range
+// Strip all whitespace for quote comparison. A stored quote comes from
+// Selection.toString() (which inserts line breaks at block boundaries) while a
+// reconstructed range uses Range.toString() (which does not), so any
+// whitespace-sensitive compare would spuriously differ on multi-element quotes.
+function normalizeQuote(s: string): string {
+  return s.replace(/\s+/g, '')
 }
 
 // Preview magnification bounds, as percentages.
@@ -137,6 +130,13 @@ export function Preview({
   } | null>(null)
   // The anchor currently being composed (compose box open in the rail).
   const [composeAnchor, setComposeAnchor] = useState<CommentAnchor | null>(null)
+  // Ids of comments whose anchor no longer resolves in the current text.
+  const [brokenIds, setBrokenIds] = useState<Set<string>>(new Set())
+  // A comment to scroll to + flash in the rail (e.g. selecting commented text).
+  const [commentFocus, setCommentFocus] = useState<{
+    id: string
+    nonce: number
+  } | null>(null)
 
   const commentingEnabled = versionId !== null && onAddComment !== undefined
 
@@ -219,27 +219,67 @@ export function Preview({
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  // Highlight commented text (a light accent, distinct from the selection
-  // highlight) by registering each comment's range as a CSS custom highlight.
+  // A DOM Range for a comment's anchor, spanning from its start element to its
+  // end element (which may differ for a multi-line selection), or null if
+  // either element is missing.
+  const rangeForComment = (c: Comment): Range | null => {
+    const container = pagesRef.current
+    if (container === null) return null
+    const startEl = container.querySelector(`.el[data-line="${c.startLine}"]`)
+    const endEl = container.querySelector(`.el[data-line="${c.endLine}"]`)
+    if (!(startEl instanceof HTMLElement) || !(endEl instanceof HTMLElement)) {
+      return null
+    }
+    const a = pointAt(startEl, c.startOffset)
+    const b = pointAt(endEl, c.endOffset)
+    if (a === null || b === null) return null
+    try {
+      const range = document.createRange()
+      range.setStart(a.node, a.offset)
+      range.setEnd(b.node, b.offset)
+      return range
+    } catch {
+      return null
+    }
+  }
+
+  // Resolve each comment against the current text: valid comments get their
+  // range highlighted (a light accent, distinct from the selection); comments
+  // whose anchor no longer matches (element gone, or the quoted text changed)
+  // are recorded as broken so the rail can flag them.
   useEffect(() => {
+    const container = pagesRef.current
+    // Before the first layout, there's nothing to resolve against — don't
+    // falsely mark everything broken.
+    if (container === null) return
+
+    const ranges: Range[] = []
+    const broken = new Set<string>()
+    for (const c of comments) {
+      const range = rangeForComment(c)
+      const ok =
+        range !== null &&
+        normalizeQuote(range.toString()) === normalizeQuote(c.quote)
+      if (ok && range !== null) ranges.push(range)
+      else broken.add(c.id)
+    }
+
     const HighlightCtor = (window as unknown as { Highlight?: typeof Highlight })
       .Highlight
     const registry = (
       CSS as unknown as { highlights?: Map<string, Highlight> }
     ).highlights
-    if (HighlightCtor === undefined || registry === undefined) return
-    const container = pagesRef.current
-    const ranges: Range[] = []
-    if (container !== null) {
-      for (const c of comments) {
-        const el = container.querySelector(`.el[data-line="${c.line}"]`)
-        if (!(el instanceof HTMLElement)) continue
-        const range = rangeWithinElement(el, c.start, c.end)
-        if (range !== null) ranges.push(range)
-      }
+    if (HighlightCtor !== undefined && registry !== undefined) {
+      if (ranges.length > 0) registry.set('comments', new HighlightCtor(...ranges))
+      else registry.delete('comments')
     }
-    if (ranges.length > 0) registry.set('comments', new HighlightCtor(...ranges))
-    else registry.delete('comments')
+
+    setBrokenIds((prev) =>
+      prev.size === broken.size && [...broken].every((id) => prev.has(id))
+        ? prev
+        : broken,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comments, pages, source])
 
   // The standard "insert comment" hotkey (⌘/Ctrl+Alt+M) opens the compose box
@@ -265,11 +305,12 @@ export function Preview({
   useEffect(() => {
     setPending(null)
     setComposeAnchor(null)
+    setCommentFocus(null)
   }, [versionId])
 
   // Scroll a comment's anchored text into view.
   const focusComment = (c: Comment) => {
-    const el = pagesRef.current?.querySelector(`.el[data-line="${c.line}"]`)
+    const el = pagesRef.current?.querySelector(`.el[data-line="${c.startLine}"]`)
     if (el instanceof HTMLElement) {
       el.scrollIntoView({ block: 'center', behavior: 'smooth' })
     }
@@ -312,15 +353,27 @@ export function Preview({
     if (!(startEl instanceof HTMLElement)) return
 
     const range = selection.getRangeAt(0)
-    const line = Number(startEl.getAttribute('data-line'))
-    const text = startEl.textContent ?? ''
-    const start = offsetWithin(startEl, range.startContainer, range.startOffset)
-    // Anchor within the starting element; clamp the end to its text.
-    const end = Math.min(
-      Math.max(offsetWithin(startEl, range.endContainer, range.endOffset), start),
-      text.length,
+    const startLine = Number(startEl.getAttribute('data-line'))
+    const startOffset = offsetWithin(
+      startEl,
+      range.startContainer,
+      range.startOffset,
     )
-    const quote = text.slice(start, end)
+    // The selection may end in a different element (a multi-line selection);
+    // anchor the end there rather than clamping to the start element.
+    const endNode = range.endContainer
+    const endEl = (
+      endNode instanceof Element ? endNode : (endNode?.parentElement ?? null)
+    )?.closest('.el[data-line]')
+    const endLine =
+      endEl instanceof HTMLElement
+        ? Number(endEl.getAttribute('data-line'))
+        : startLine
+    const endOffset =
+      endEl instanceof HTMLElement
+        ? offsetWithin(endEl, range.endContainer, range.endOffset)
+        : (startEl.textContent ?? '').length
+    const quote = selection.toString()
 
     // Persist the preview highlight independently of the native selection.
     const HighlightCtor = (window as unknown as { Highlight?: typeof Highlight })
@@ -335,7 +388,20 @@ export function Preview({
       )
     }
 
-    onJump?.(line)
+    onJump?.(startLine)
+
+    // If the selection overlaps an existing comment, surface that comment.
+    const hit = comments.find((c) => {
+      const r = rangeForComment(c)
+      if (r === null) return false
+      return (
+        range.compareBoundaryPoints(Range.END_TO_START, r) < 0 &&
+        range.compareBoundaryPoints(Range.START_TO_END, r) > 0
+      )
+    })
+    if (hit !== undefined) {
+      setCommentFocus((f) => ({ id: hit.id, nonce: (f?.nonce ?? 0) + 1 }))
+    }
 
     if (commentingEnabled && versionId !== null && quote.trim() !== '') {
       const scroll = scrollRef.current
@@ -346,7 +412,10 @@ export function Preview({
             scroll.scrollTop
           : 0
       setComposeAnchor(null)
-      setPending({ anchor: { versionId, line, start, end, quote }, top })
+      setPending({
+        anchor: { versionId, startLine, startOffset, endLine, endOffset, quote },
+        top,
+      })
     }
   }
 
@@ -479,6 +548,8 @@ export function Preview({
         {commentingEnabled && (comments.length > 0 || composeAnchor !== null) && (
           <CommentsRail
             comments={comments}
+            brokenIds={brokenIds}
+            focus={commentFocus}
             composeAnchor={composeAnchor}
             authorName={authorName}
             onCreate={(text) => {
