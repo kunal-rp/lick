@@ -88,3 +88,30 @@
   background: var(--accent);
   color: var(--on-accent);
 }
+
+/*
+ * Mobile: leave room at the left for the floating menu button, and let the bar
+ * wrap its controls onto a second row rather than scroll or overflow when they
+ * don't all fit across a narrow viewport.
+ */
+@media (max-width: 768px) {
+  .verbar {
+    height: auto;
+    min-height: 40px;
+    padding-left: 52px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  /* The script name may claim the first row on its own; let it truncate. */
+  .verbar__script {
+    max-width: 100%;
+  }
+
+  /* Supplementary, and the button already reflects the state — hide to save room. */
+  .verbar__saved-at {
+    display: none;
+  }
+}

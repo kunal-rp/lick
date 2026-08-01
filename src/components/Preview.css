@@ -66,6 +66,18 @@
   color: #fff;
 }
 
+/* Mobile: no zoom controls — the pages fit the narrow pane on their own. */
+@media (max-width: 768px) {
+  .preview__toolbar {
+    display: none;
+  }
+
+  /* Tighter gutters so the fitted page uses the phone's width. */
+  .preview__scroll {
+    padding: 12px;
+  }
+}
+
 /* Scales the rendered sheets only (the measurer lives outside this wrapper). */
 .preview__pages {
   zoom: var(--preview-zoom, 1);

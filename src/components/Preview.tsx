@@ -4,6 +4,7 @@ import { parse, renderEmphasis } from '../fountain'
 import { LINES_PER_PAGE } from '../pagination'
 import { CommentsRail } from './CommentsRail'
 import type { Comment, CommentAnchor } from '../comments'
+import { useIsMobile } from '../useIsMobile'
 import './Preview.css'
 
 interface PreviewProps {
@@ -116,6 +117,7 @@ export function Preview({
   onEditComment,
   onDeleteComment,
 }: PreviewProps) {
+  const isMobile = useIsMobile()
   const screenplay = useMemo(() => parse(source), [source])
   const rows = useMemo(() => buildRows(screenplay.elements), [screenplay])
   const measureRef = useRef<HTMLDivElement>(null)
@@ -234,6 +236,27 @@ export function Preview({
     const z = Math.floor((available / textExtentPx) * 100)
     setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)))
   }
+
+  // Mobile has no zoom controls, so fit the full page width to the pane
+  // automatically — recomputing whenever the pane resizes (rotation, keyboard).
+  useEffect(() => {
+    if (!isMobile) return
+    const scroll = scrollRef.current
+    if (scroll === null) return
+    const fit = () => {
+      const style = getComputedStyle(scroll)
+      const padX =
+        parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+      const pageWidthPx = 8.5 * 96 // full sheet, so nothing crops
+      const available = scroll.clientWidth - padX
+      const z = Math.floor((available / pageWidthPx) * 100)
+      setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)))
+    }
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(scroll)
+    return () => observer.disconnect()
+  }, [isMobile])
 
   // A DOM Range for a comment's anchor, spanning from its start element to its
   // end element (which may differ for a multi-line selection), or null if
@@ -564,6 +587,11 @@ export function Preview({
             ref={pagesRef}
             style={{ '--preview-zoom': zoom / 100 } as CSSProperties}
             onMouseUp={handleSelectionJump}
+            // Touch: mouse events don't fire while selecting, so mirror the
+            // desktop mouseup on touchend. Double-tapping a word selects it;
+            // read the settled selection on the next frame (handleSelectionJump
+            // no-ops for a collapsed selection, e.g. a plain tap or scroll).
+            onTouchEnd={() => requestAnimationFrame(handleSelectionJump)}
           >
             {renderTitlePage()}
 

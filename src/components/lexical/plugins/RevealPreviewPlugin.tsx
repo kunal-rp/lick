@@ -37,12 +37,28 @@ export function RevealPreviewPlugin({ onReveal }: Props) {
   useEffect(() => {
     const root = editor.getRootElement()
     if (root === null || onReveal === undefined) return
-    const handler = () => {
+    const reveal = () => {
       const line = lineOfSelection(root)
       if (line !== null) onReveal(line)
     }
-    root.addEventListener('dblclick', handler)
-    return () => root.removeEventListener('dblclick', handler)
+    // Desktop: a double-click selects a word and fires `dblclick`.
+    const onDblClick = () => reveal()
+    // Touch: mouse events don't fire while selecting, so mirror the gesture
+    // via `touchend`. A double-tap selects a word (a non-collapsed selection);
+    // read it on the next frame, once the browser has applied the selection.
+    const onTouchEnd = () => {
+      requestAnimationFrame(() => {
+        const selection = window.getSelection()
+        if (selection === null || selection.isCollapsed) return // plain tap
+        reveal()
+      })
+    }
+    root.addEventListener('dblclick', onDblClick)
+    root.addEventListener('touchend', onTouchEnd)
+    return () => {
+      root.removeEventListener('dblclick', onDblClick)
+      root.removeEventListener('touchend', onTouchEnd)
+    }
   }, [editor, onReveal])
 
   return null

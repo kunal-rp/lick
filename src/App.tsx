@@ -38,6 +38,7 @@ import { useWorkingFolder } from './drive/useWorkingFolder'
 import { loadLastOpened, saveLastOpened } from './lastOpened'
 import { loadLayout, saveLayout } from './layout'
 import { loadTheme, saveTheme, type Theme } from './theme'
+import { useIsMobile } from './useIsMobile'
 import './App.css'
 
 // Background auto-save: persist after the user pauses, or after enough edits,
@@ -62,6 +63,10 @@ async function loadTree(folderId: string): Promise<{
 export default function App() {
   const auth = useDriveAuth()
   const { folder, picking, choose } = useWorkingFolder()
+  // Phone-width layout: the file nav becomes a floating drawer, the editor
+  // fills the screen, and the preview stacks inline below it (no side split,
+  // no Characters & Locations panel).
+  const isMobile = useIsMobile()
 
   // The full directory: script folders and each script's version files,
   // eagerly loaded so the left-nav tree shows everything.
@@ -207,6 +212,12 @@ export default function App() {
     layoutRef.current.navCollapsed = navCollapsed
     saveLayout(layoutRef.current)
   }, [showPreview, navCollapsed])
+
+  // Entering mobile width, collapse the nav to its floating button so the
+  // editor fills the screen; the drawer is a tap away.
+  useEffect(() => {
+    if (isMobile) setNavCollapsed(true)
+  }, [isMobile])
 
   // Track the selected version for the async-save guard.
   useEffect(() => {
@@ -409,12 +420,14 @@ export default function App() {
     setExpandedScripts((prev) => new Set(prev).add(script.id))
     const latest = parseVersions(versionsByScript[script.id] ?? [])[0]
     setSelectedVersionId(latest?.file.id ?? null)
+    if (isMobile) setNavCollapsed(true) // close the drawer, reveal the editor
   }
 
   function selectVersion(scriptId: string, versionId: string) {
     void persist() // flush any unsaved edits to the outgoing version first
     setSelectedScriptId(scriptId)
     setSelectedVersionId(versionId)
+    if (isMobile) setNavCollapsed(true) // close the drawer, reveal the editor
   }
 
   function toggleExpand(scriptId: string) {
@@ -632,9 +645,36 @@ export default function App() {
                     ]}
                   />
                 )
+                const previewNode = (
+                  <Preview
+                    source={source}
+                    onPageBreaks={setPageBreakLines}
+                    onJump={jumpToLine}
+                    reveal={reveal}
+                    versionId={selectedVersionId}
+                    comments={comments.filter(
+                      (c) => c.versionId === selectedVersionId,
+                    )}
+                    onAddComment={addComment}
+                    onEditComment={editComment}
+                    onDeleteComment={deleteComment}
+                  />
+                )
                 // The Characters & Locations panel only accompanies the
                 // preview, so with the preview hidden the editor fills the pane.
                 if (!showPreview) return editorNode
+                // Mobile: the editor is the core surface, so the preview stacks
+                // inline below it — no side-by-side split, no insights panel.
+                if (isMobile) {
+                  return (
+                    <div className="mobilestack">
+                      <div className="mobilestack__pane">{editorNode}</div>
+                      <div className="mobilestack__pane mobilestack__pane--preview">
+                        {previewNode}
+                      </div>
+                    </div>
+                  )
+                }
                 return (
                   <SplitPane
                     left={editorNode}
@@ -645,21 +685,7 @@ export default function App() {
                     }}
                     right={
                       <div className="rightstack">
-                        <div className="rightstack__preview">
-                          <Preview
-                            source={source}
-                            onPageBreaks={setPageBreakLines}
-                            onJump={jumpToLine}
-                            reveal={reveal}
-                            versionId={selectedVersionId}
-                            comments={comments.filter(
-                              (c) => c.versionId === selectedVersionId,
-                            )}
-                            onAddComment={addComment}
-                            onEditComment={editComment}
-                            onDeleteComment={deleteComment}
-                          />
-                        </div>
+                        <div className="rightstack__preview">{previewNode}</div>
                         <InsightsPanel
                           source={source}
                           onJump={jumpToLine}

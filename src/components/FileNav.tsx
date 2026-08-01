@@ -64,7 +64,10 @@ export function FileNav({
   }
 
   return (
-    <aside className="filenav">
+    <>
+      {/* Mobile only: tapping the dimmed backdrop closes the drawer. */}
+      <div className="filenav__backdrop" onClick={onToggle} aria-hidden="true" />
+      <aside className="filenav">
       <div className="filenav__header">
         <span className="filenav__brand">lick screenwriting</span>
         <button
@@ -204,6 +207,7 @@ export function FileNav({
           </div>
         )}
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }
