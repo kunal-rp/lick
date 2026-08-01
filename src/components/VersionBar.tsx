@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Version } from '../drive/versions'
 import './VersionBar.css'
 
@@ -30,6 +31,29 @@ export function VersionBar({
   onNewVersion,
   onExportPdf,
 }: VersionBarProps) {
+  // Mobile only: an options menu collapsing the less-frequent actions
+  // (Export PDF, New version) behind a single button in the top bar.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: PointerEvent) => {
+      if (menuRef.current !== null && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
+
   const saveLabel = saving ? 'Saving…' : dirty ? 'Save' : 'Saved'
   const savedTime =
     savedAt !== null
@@ -82,7 +106,7 @@ export function VersionBar({
       </button>
       <button
         type="button"
-        className="verbar__btn"
+        className="verbar__btn verbar__btn--inline-action"
         onClick={onExportPdf}
         disabled={busy || saving}
         title="Render the current preview to a PDF, stored beside the versions"
@@ -91,13 +115,57 @@ export function VersionBar({
       </button>
       <button
         type="button"
-        className="verbar__btn verbar__btn--primary"
+        className="verbar__btn verbar__btn--primary verbar__btn--inline-action"
         onClick={onNewVersion}
         disabled={busy || saving}
         title="Snapshot the current text as a new version"
       >
         New version
       </button>
+
+      {/* Mobile only: Export PDF and New version collapse into this menu. */}
+      <div className="verbar__menu" ref={menuRef}>
+        <button
+          type="button"
+          className="verbar__btn verbar__options"
+          onClick={() => setMenuOpen((open) => !open)}
+          disabled={busy || saving}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label="More options"
+          title="More options"
+        >
+          ⋯
+        </button>
+        {menuOpen && (
+          <div className="verbar__popup" role="menu">
+            <button
+              type="button"
+              className="verbar__popup-item"
+              role="menuitem"
+              disabled={busy || saving}
+              onClick={() => {
+                setMenuOpen(false)
+                onExportPdf()
+              }}
+            >
+              Export PDF
+            </button>
+            <button
+              type="button"
+              className="verbar__popup-item"
+              role="menuitem"
+              disabled={busy || saving}
+              onClick={() => {
+                setMenuOpen(false)
+                onNewVersion()
+              }}
+            >
+              New version
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
