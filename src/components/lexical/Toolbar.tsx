@@ -1,5 +1,6 @@
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { MARKERS, toggleEmphasis, type EmphasisKind } from './emphasis'
+import { SearchBar } from './SearchBar'
 
 // Show ⌘ on Apple platforms, Ctrl elsewhere — matching the actual shortcut
 // handled by EmphasisShortcutsPlugin.
@@ -52,6 +53,8 @@ export function Toolbar({ viewToggles = [] }: { viewToggles?: ViewToggle[] }) {
           </button>
         )
       })}
+
+      <SearchBar />
 
       {viewToggles.length > 0 && (
         <div className="toolbar__views">

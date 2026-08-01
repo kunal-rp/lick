@@ -295,38 +295,20 @@
 }
 
 /*
- * Mobile: the file nav is never inline. Collapsed, it's a floating menu button
- * pinned to the top-left; expanded, it's a drawer that slides over the editor
- * with a dimmed backdrop. Selecting a script/version closes it (see App.tsx).
+ * Mobile: the file nav is never inline. Collapsed, it's absent entirely — the
+ * toggle lives inline in the top bar (see VersionBar's .verbar__nav and App's
+ * .mobilebar). Expanded, it's a drawer that slides over the editor with a
+ * dimmed backdrop. Selecting a script/version closes it (see App.tsx).
  */
 @media (max-width: 768px) {
-  /* Collapsed → floating menu button. */
+  /* Collapsed → nothing; the top-bar button is the only affordance. */
   .filenav--collapsed {
-    position: fixed;
-    top: 8px;
-    left: 8px;
-    z-index: 60;
-    flex-basis: auto;
-    width: auto;
-    height: auto;
-    background: transparent;
-    border-right: none;
+    display: none;
   }
 
-  .filenav--collapsed .filenav__icon-btn {
-    width: 40px;
-    height: 40px;
-    margin-top: 0;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--panel-bg);
-    color: var(--text);
-    font-size: 20px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-  }
-
-  /* Expanded → drawer overlay. */
-  .filenav {
+  /* Expanded → drawer overlay. Scoped so the collapsed nav (which also
+     carries .filenav) can't pick up the drawer's full-height column + shadow. */
+  .filenav:not(.filenav--collapsed) {
     position: fixed;
     top: 0;
     left: 0;

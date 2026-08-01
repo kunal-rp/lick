@@ -15,6 +15,8 @@ interface VersionBarProps {
   onSave: () => void
   onNewVersion: () => void
   onExportPdf: () => void
+  /** Open the project drawer (mobile only; the button is hidden on desktop). */
+  onToggleNav: () => void
 }
 
 /** Top bar over the editor: current script, version selector, save/new version. */
@@ -30,6 +32,7 @@ export function VersionBar({
   onSave,
   onNewVersion,
   onExportPdf,
+  onToggleNav,
 }: VersionBarProps) {
   // Mobile only: an options menu collapsing the less-frequent actions
   // (Export PDF, New version) behind a single button in the top bar.
@@ -67,6 +70,17 @@ export function VersionBar({
 
   return (
     <div className="verbar">
+      {/* Mobile only: opens the project drawer, inline at the bar's left. */}
+      <button
+        type="button"
+        className="verbar__nav"
+        onClick={onToggleNav}
+        aria-label="Show project"
+        title="Show project"
+      >
+        ☰
+      </button>
+
       <span className="verbar__script" title={scriptName}>
         {scriptName}
       </span>

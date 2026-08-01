@@ -10,6 +10,27 @@
   user-select: none;
 }
 
+/* Inline project-drawer toggle, shown only on mobile (see media query). */
+.verbar__nav {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.verbar__nav:hover {
+  background: var(--hover);
+}
+
 .verbar__script {
   min-width: 0;
   max-width: 40%;
@@ -138,19 +159,22 @@
 }
 
 /*
- * Mobile: leave room at the left for the floating menu button, and let the bar
- * wrap its controls onto a second row rather than scroll or overflow when they
- * don't all fit across a narrow viewport.
+ * Mobile: the drawer toggle sits inline at the bar's left, and the bar wraps
+ * its controls onto a second row rather than scroll or overflow when they don't
+ * all fit across a narrow viewport.
  */
 @media (max-width: 768px) {
   .verbar {
     height: auto;
     min-height: 40px;
-    padding-left: 52px;
     padding-top: 6px;
     padding-bottom: 6px;
     flex-wrap: wrap;
     row-gap: 6px;
+  }
+
+  .verbar__nav {
+    display: inline-flex;
   }
 
   /* The script name may claim the first row on its own; let it truncate. */

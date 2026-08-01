@@ -18,6 +18,26 @@
 }
 
 /*
+ * Mobile-only top bar for the empty/loading states (which have no VersionBar),
+ * carrying just the project-drawer toggle. Hidden on desktop.
+ */
+.mobilebar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobilebar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-height: 40px;
+    padding: 6px 10px;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+/*
  * Mobile: editor on top, preview stacked inline below it (rendered only at
  * phone width — see useIsMobile / App.tsx). The editor is the core surface, so
  * it gets the larger share; each pane scrolls internally.

@@ -60,6 +60,149 @@
   text-decoration: underline;
 }
 
+/* Find-in-editor: an always-visible input group with match navigation. */
+.toolbar__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.toolbar__search-nav--active,
+.toolbar__search-nav--active:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Find & replace popup, anchored below the search bar's right edge. */
+.toolbar__replace {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: -1px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 260px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.toolbar__replace-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar__replace-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.toolbar__replace-input:focus {
+  border-color: var(--accent);
+}
+
+.toolbar__replace-input::placeholder {
+  color: var(--text-faint);
+}
+
+.toolbar__replace-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.toolbar__replace-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.toolbar__replace-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.toolbar__replace-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.toolbar__search-icon {
+  color: var(--text-faint);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.toolbar__search-input {
+  width: 130px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  outline: none;
+}
+
+.toolbar__search-input::placeholder {
+  color: var(--text-faint);
+}
+
+.toolbar__search-count {
+  min-width: 32px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar__search-nav {
+  padding: 0 5px;
+}
+
+.toolbar__search-nav:active {
+  /* Stepping through matches isn't a formatting action — don't flash accent. */
+  background: var(--hover);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.toolbar__search-nav:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.toolbar__search-nav:disabled:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+
 /* Push the view toggles to the opposite end of the toolbar. */
 .toolbar__views {
   display: flex;
@@ -144,4 +287,34 @@
 
 .fe-paragraph {
   margin: 0;
+}
+
+/*
+ * Phones: the toolbar holds format buttons, the find bar, and view toggles —
+ * more than fits one row. Wrap instead of overflowing so the bar never exceeds
+ * the screen width or scrolls sideways. Kept in sync with useIsMobile's 768px.
+ */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  /* Let the find bar take the remaining row width and shrink its input. */
+  .toolbar__search {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+
+  .toolbar__search-input {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Never let the replace popup push past the viewport edge. */
+  .toolbar__replace {
+    width: 260px;
+    max-width: calc(100vw - 20px);
+  }
 }
