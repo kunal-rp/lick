@@ -539,6 +539,22 @@ export default function App() {
     return <FolderGate onChoose={choose} picking={picking} />
   }
 
+  // Mobile-only top bar for states without a VersionBar (empty/loading), so the
+  // project drawer stays reachable. Hidden on desktop via CSS.
+  const mobileBar = (
+    <div className="mobilebar">
+      <button
+        type="button"
+        className="verbar__nav"
+        onClick={() => setNavCollapsed(false)}
+        aria-label="Show project"
+        title="Show project"
+      >
+        ☰
+      </button>
+    </div>
+  )
+
   return (
     <div className="workspace">
       <FileNav
@@ -578,23 +594,32 @@ export default function App() {
           </div>
         )}
         {selectedScriptId === null ? (
-          <div className="workspace__empty">
-            {treeLoading ? 'Loading…' : 'No scripts yet. Create one.'}
-          </div>
+          <>
+            {mobileBar}
+            <div className="workspace__empty">
+              {treeLoading ? 'Loading…' : 'No scripts yet. Create one.'}
+            </div>
+          </>
         ) : selectedVersionId === null ? (
-          <div className="workspace__empty">
-            <p>This script has no versions.</p>
-            <button
-              type="button"
-              className="workspace__empty-action"
-              onClick={newVersion}
-              disabled={busy}
-            >
-              New version
-            </button>
-          </div>
+          <>
+            {mobileBar}
+            <div className="workspace__empty">
+              <p>This script has no versions.</p>
+              <button
+                type="button"
+                className="workspace__empty-action"
+                onClick={newVersion}
+                disabled={busy}
+              >
+                New version
+              </button>
+            </div>
+          </>
         ) : content === null ? (
-          <div className="workspace__empty">Loading…</div>
+          <>
+            {mobileBar}
+            <div className="workspace__empty">Loading…</div>
+          </>
         ) : (
           <>
             <VersionBar
@@ -611,6 +636,7 @@ export default function App() {
               onSave={() => void persist()}
               onNewVersion={newVersion}
               onExportPdf={exportPdf}
+              onToggleNav={() => setNavCollapsed(false)}
             />
             <div className="workspace__editor">
               {(() => {
