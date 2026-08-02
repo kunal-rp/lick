@@ -123,6 +123,7 @@ export function Preview({
   const measureRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pagesRef = useRef<HTMLDivElement>(null)
+  const pagesFrameRef = useRef<HTMLDivElement>(null)
   const reportedBreaks = useRef<string>('')
   // Each entry is a page: the indices (into `rows`) that land on it.
   const [pages, setPages] = useState<number[][]>([])
@@ -257,6 +258,27 @@ export function Preview({
     observer.observe(scroll)
     return () => observer.disconnect()
   }, [isMobile])
+
+  // The sheets are scaled with `transform`, which (unlike `zoom`) doesn't shrink
+  // the element's layout box — so the scroll region would otherwise reserve the
+  // full un-scaled size. Size the frame to the scaled extent of its contents so
+  // scrolling and centering track what's actually drawn. offsetWidth/Height are
+  // pre-transform, so multiplying by the scale gives the on-screen size. The
+  // observer catches content growth (pagination, edits); `zoom` covers rescale.
+  useLayoutEffect(() => {
+    const inner = pagesRef.current
+    const frame = pagesFrameRef.current
+    if (inner === null || frame === null) return
+    const apply = () => {
+      const s = zoom / 100
+      frame.style.width = `${inner.offsetWidth * s}px`
+      frame.style.height = `${inner.offsetHeight * s}px`
+    }
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(inner)
+    return () => observer.disconnect()
+  }, [zoom, pages])
 
   // A DOM Range for a comment's anchor, spanning from its start element to its
   // end element (which may differ for a multi-line selection), or null if
@@ -580,35 +602,43 @@ export function Preview({
             {rows.map(measureRow)}
           </div>
 
-          {/* `zoom` scales the rendered sheets only; it doesn't affect the
-              measurer's layout metrics, so page breaks are unchanged. */}
-          <div
-            className="preview__pages"
-            ref={pagesRef}
-            style={{ '--preview-zoom': zoom / 100 } as CSSProperties}
-            onMouseUp={handleSelectionJump}
-            // Touch: mouse events don't fire while selecting, so mirror the
-            // desktop mouseup on touchend. Double-tapping a word selects it;
-            // read the settled selection on the next frame (handleSelectionJump
-            // no-ops for a collapsed selection, e.g. a plain tap or scroll).
-            onTouchEnd={() => requestAnimationFrame(handleSelectionJump)}
-          >
-            {renderTitlePage()}
+          {/* `transform: scale` (not `zoom`) scales the rendered sheets: it's
+              reliable on every browser, whereas fractional `zoom` mis-rasterizes
+              on iOS Safari (block paragraphs overlap). Because transform leaves
+              the layout box full-size, the frame is sized to the scaled extent
+              in JS (see the effect below) so the scroll region stays correct.
+              The measurer lives outside this wrapper, so page breaks are
+              unaffected by the scale. */}
+          <div className="preview__pages-frame" ref={pagesFrameRef}>
+            <div
+              className="preview__pages"
+              ref={pagesRef}
+              style={{ '--preview-zoom': zoom / 100 } as CSSProperties}
+              onMouseUp={handleSelectionJump}
+              // Touch: mouse events don't fire while selecting, so mirror the
+              // desktop mouseup on touchend. Double-tapping a word selects it;
+              // read the settled selection on the next frame
+              // (handleSelectionJump no-ops for a collapsed selection, e.g. a
+              // plain tap or scroll).
+              onTouchEnd={() => requestAnimationFrame(handleSelectionJump)}
+            >
+              {renderTitlePage()}
 
-            {isEmpty
-              ? screenplay.titlePage === null && (
-                  <div className="preview__page">
-                    <p className="preview__empty">Nothing to preview yet.</p>
-                  </div>
-                )
-              : pages.map((group, p) => (
-                  <div className="preview__page" key={p}>
-                    {p > 0 && (
-                      <span className="preview__page-number">{p + 1}.</span>
-                    )}
-                    {group.map(renderRow)}
-                  </div>
-                ))}
+              {isEmpty
+                ? screenplay.titlePage === null && (
+                    <div className="preview__page">
+                      <p className="preview__empty">Nothing to preview yet.</p>
+                    </div>
+                  )
+                : pages.map((group, p) => (
+                    <div className="preview__page" key={p}>
+                      {p > 0 && (
+                        <span className="preview__page-number">{p + 1}.</span>
+                      )}
+                      {group.map(renderRow)}
+                    </div>
+                  ))}
+            </div>
           </div>
 
           {/* Floating "add comment" button anchored to the current selection. */}

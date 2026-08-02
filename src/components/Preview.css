@@ -78,9 +78,20 @@
   }
 }
 
-/* Scales the rendered sheets only (the measurer lives outside this wrapper). */
+/* Frame that reserves the on-screen (scaled) size of the sheets and centres
+   them; JS sets its width/height since `transform` doesn't resize the box. */
+.preview__pages-frame {
+  margin: 0 auto;
+}
+
+/* Scales the rendered sheets only (the measurer lives outside this wrapper).
+   `transform` — not `zoom` — because fractional `zoom` overlaps text on iOS
+   Safari. `transform-origin: top left` keeps the scaled box aligned with the
+   frame's corner so the frame's computed size matches exactly. */
 .preview__pages {
-  zoom: var(--preview-zoom, 1);
+  width: 8.5in;
+  transform: scale(var(--preview-zoom, 1));
+  transform-origin: top left;
 }
 
 /* Persisted preview selection — kept visible after the editor takes focus. */
