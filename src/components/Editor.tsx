@@ -108,7 +108,7 @@ export function Editor({
           <PageBreakGuidesPlugin breakLines={pageBreakLines} />
           <PlainTextPlugin
             contentEditable={
-              <ContentEditable className="editor__content" spellCheck={false} />
+              <ContentEditable className="editor__content" spellCheck={true} />
             }
             placeholder={
               <div className="editor__placeholder">
