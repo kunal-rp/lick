@@ -317,4 +317,9 @@
     width: 260px;
     max-width: calc(100vw - 20px);
   }
+
+  /* Tight on space — the view toggles show their icon only. */
+  .toolbar__toggle-label {
+    display: none;
+  }
 }

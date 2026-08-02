@@ -64,6 +64,7 @@ function normalizeQuote(s: string): string {
 // Preview magnification bounds, as percentages.
 const ZOOM_MIN = 10
 const ZOOM_MAX = 200
+const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
 
 // A renderable unit. Single elements and forced breaks map 1:1 to elements;
 // a dual pair coalesces a left and right dialogue block into one two-column row
@@ -207,6 +208,12 @@ export function Preview({
 
   // Preview magnification, as a percentage (100 = actual size).
   const [zoom, setZoom] = useState(100)
+  // Mirror of `zoom` for use inside native event listeners without re-binding.
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  // Set once the user zooms by hand (wheel or pinch); the mobile auto-fit then
+  // stops overriding their choice on the next resize.
+  const userZoomedRef = useRef(false)
 
   // Trackpad pinch and ctrl+wheel arrive as wheel events with `ctrlKey` set;
   // consume them to drive zoom (and stop the browser's own page zoom). The
@@ -217,12 +224,48 @@ export function Preview({
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return
       e.preventDefault()
-      setZoom((z) =>
-        Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * Math.exp(-e.deltaY * 0.005))),
-      )
+      userZoomedRef.current = true
+      setZoom((z) => clampZoom(z * Math.exp(-e.deltaY * 0.005)))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Touch pinch drives the same magnification. Two fingers on the preview scale
+  // the zoom about the gesture's start; `touch-action: pan-x pan-y` on the
+  // scroll element (see CSS) stops the browser's own pinch so this can take
+  // over. Attached natively so the move handler can be non-passive.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el === null) return
+    const spread = (t: TouchList) =>
+      Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    let startSpread = 0
+    let startZoom = 0
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return
+      startSpread = spread(e.touches)
+      startZoom = zoomRef.current
+    }
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || startSpread === 0) return
+      e.preventDefault() // suppress native pinch / scroll during the gesture
+      userZoomedRef.current = true
+      setZoom(clampZoom((startZoom * spread(e.touches)) / startSpread))
+    }
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) startSpread = 0
+    }
+    el.addEventListener('touchstart', onStart, { passive: false })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd)
+    el.addEventListener('touchcancel', onEnd)
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', onEnd)
+    }
   }, [])
 
   // Fit: the largest zoom that still shows the full text line width. The
@@ -234,8 +277,8 @@ export function Preview({
     if (scroll === null) return
     const textExtentPx = 7.5 * 96 // through the right edge of the text area
     const available = scroll.clientWidth - 48 // .preview__scroll padding (24px each)
-    const z = Math.floor((available / textExtentPx) * 100)
-    setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)))
+    userZoomedRef.current = false // an explicit Fit re-enables mobile auto-fit
+    setZoom(clampZoom(Math.floor((available / textExtentPx) * 100)))
   }
 
   // Mobile has no zoom controls, so fit the full page width to the pane
@@ -245,13 +288,13 @@ export function Preview({
     const scroll = scrollRef.current
     if (scroll === null) return
     const fit = () => {
+      if (userZoomedRef.current) return // respect a manual pinch
       const style = getComputedStyle(scroll)
       const padX =
         parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
       const pageWidthPx = 8.5 * 96 // full sheet, so nothing crops
       const available = scroll.clientWidth - padX
-      const z = Math.floor((available / pageWidthPx) * 100)
-      setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)))
+      setZoom(clampZoom(Math.floor((available / pageWidthPx) * 100)))
     }
     fit()
     const observer = new ResizeObserver(fit)

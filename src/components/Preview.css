@@ -138,6 +138,8 @@
   min-width: 0;
   overflow: auto;
   padding: 24px;
+  /* Reserve pinch for our own zoom handler (panning still scrolls). */
+  touch-action: pan-x pan-y;
 }
 
 /* Floating "add comment" button in the right margin of the page area. */

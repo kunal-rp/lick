@@ -662,7 +662,7 @@ export default function App() {
                     viewToggles={[
                       {
                         key: 'preview',
-                        glyph: '▦',
+                        glyph: '📄',
                         label: 'Preview',
                         title: 'Show or hide the preview',
                         active: showPreview,
