@@ -145,8 +145,30 @@ export function Preview({
   // color fills the sheet's margins and any trailing blank space. Populated by
   // the layout effect below; empty unless the toggle is on.
   const [sectionBands, setSectionBands] = useState<
-    { top: number; height: number; color: string }[][]
+    { id: string; top: number; height: number; color: string }[][]
   >([])
+  // Sticky section labels, measured in scroll-content coordinates (outside the
+  // pages' zoom transform, where `position: sticky` can't reach). One per
+  // section, spanning the union of its per-page bands; `layerHeight` sizes the
+  // overlay to the scroll content. Populated by the second effect below.
+  const [stickyLabels, setStickyLabels] = useState<
+    {
+      id: string
+      label: string
+      description: string
+      color: string
+      top: number
+      height: number
+      left: number
+    }[]
+  >([])
+  const [stickyLayerHeight, setStickyLayerHeight] = useState(0)
+
+  const sectionById = useMemo(() => {
+    const map = new Map<string, Section>()
+    for (const s of sections) map.set(s.id, s)
+    return map
+  }, [sections])
 
   // A selection awaiting a comment: its anchor + vertical position for the
   // floating "+ Comment" button. Cleared once composing or dismissed.
@@ -260,13 +282,13 @@ export function Preview({
     const pageEls = Array.from(
       container.querySelectorAll('.preview__page:not(.preview__title)'),
     ) as HTMLElement[]
-    const result: { top: number; height: number; color: string }[][] = []
+    const result: { id: string; top: number; height: number; color: string }[][] = []
     for (const pageEl of pageEls) {
       const els = Array.from(
         pageEl.querySelectorAll('.el[data-line]'),
       ) as HTMLElement[]
       const pageH = pageEl.offsetHeight
-      const bands: { top: number; height: number; color: string }[] = []
+      const bands: { id: string; top: number; height: number; color: string }[] = []
       let i = 0
       while (i < els.length) {
         const section = sectionForLine(Number(els[i].getAttribute('data-line')))
@@ -289,7 +311,7 @@ export function Preview({
         }
         if (startIdx === 0) top = 0
         if (i === els.length) bottom = pageH
-        bands.push({ top, height: bottom - top, color: section.color })
+        bands.push({ id: section.id, top, height: bottom - top, color: section.color })
       }
       result.push(bands)
     }
@@ -301,6 +323,62 @@ export function Preview({
   // Mirror of `zoom` for use inside native event listeners without re-binding.
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
+
+  // Position the sticky section labels. `position: sticky` can't reach the
+  // scroll container from inside the zoom-transformed pages, so the labels live
+  // in an overlay that is a direct child of the scroll element; here we measure
+  // each section's on-screen band extent (union across its pages) and express it
+  // in scroll-content coordinates for that overlay. Re-runs when the bands or
+  // the zoom change; the coordinates are scroll-invariant, so no scroll listener
+  // is needed (the browser handles the pinning via `position: sticky`).
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current
+    const container = pagesRef.current
+    if (scroll === null || container === null) return
+    if (!showSections) {
+      setStickyLabels((prev) => (prev.length === 0 ? prev : []))
+      setStickyLayerHeight(0)
+      return
+    }
+    const scrollRect = scroll.getBoundingClientRect()
+    const bandEls = Array.from(
+      container.querySelectorAll('.preview__section-band[data-sid]'),
+    ) as HTMLElement[]
+
+    const byId = new Map<string, { top: number; bottom: number; left: number }>()
+    for (const el of bandEls) {
+      const sid = el.getAttribute('data-sid')
+      if (sid === null) continue
+      const r = el.getBoundingClientRect()
+      const top = r.top - scrollRect.top + scroll.scrollTop
+      const bottom = r.bottom - scrollRect.top + scroll.scrollTop
+      const left = r.left - scrollRect.left + scroll.scrollLeft
+      const cur = byId.get(sid)
+      if (cur === undefined) byId.set(sid, { top, bottom, left })
+      else {
+        cur.top = Math.min(cur.top, top)
+        cur.bottom = Math.max(cur.bottom, bottom)
+        cur.left = Math.min(cur.left, left)
+      }
+    }
+
+    const labels = []
+    for (const [sid, ext] of byId) {
+      const s = sectionById.get(sid)
+      if (s === undefined) continue
+      labels.push({
+        id: sid,
+        label: s.label,
+        description: s.description,
+        color: s.color,
+        top: ext.top,
+        height: ext.bottom - ext.top,
+        left: ext.left + 14,
+      })
+    }
+    setStickyLabels(labels)
+    setStickyLayerHeight(scroll.scrollHeight)
+  }, [sectionBands, zoom, sectionById, showSections])
   // Set once the user zooms by hand (wheel or pinch); the mobile auto-fit then
   // stops overriding their choice on the next resize.
   const userZoomedRef = useRef(false)
@@ -748,6 +826,38 @@ export function Preview({
             {rows.map(measureRow)}
           </div>
 
+          {/* Sticky section labels. This overlay is a direct child of the
+              scroll element — outside the pages' zoom transform — so its
+              `position: sticky` pills can pin to the top of the viewport. Tracks
+              are placed in scroll-content coordinates by the measuring effect. */}
+          {stickyLabels.length > 0 && (
+            <div
+              className="preview__section-sticky"
+              style={{ height: stickyLayerHeight }}
+              aria-hidden="true"
+            >
+              {stickyLabels.map((l) => (
+                <div
+                  key={l.id}
+                  className="preview__section-label-track"
+                  style={{ top: l.top, height: l.height, left: l.left }}
+                >
+                  <span
+                    className="preview__section-label"
+                    style={{ '--section-color': l.color } as CSSProperties}
+                  >
+                    <span className="preview__section-label-name">{l.label}</span>
+                    {l.description !== '' && (
+                      <span className="preview__section-label-desc">
+                        {l.description}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* `transform: scale` (not `zoom`) scales the rendered sheets: it's
               reliable on every browser, whereas fractional `zoom` mis-rasterizes
               on iOS Safari (block paragraphs overlap). Because transform leaves
@@ -786,6 +896,7 @@ export function Preview({
                               <div
                                 key={bi}
                                 className="preview__section-band"
+                                data-sid={b.id}
                                 style={
                                   {
                                     top: b.top,
