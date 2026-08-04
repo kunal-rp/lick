@@ -213,7 +213,6 @@
   }
 }
 
-/* Pages on the left, comments rail on the right. */
 .preview__body {
   flex: 1 1 auto;
   display: flex;
@@ -229,6 +228,30 @@
   padding: 24px;
   /* Reserve pinch for our own zoom handler (panning still scrolls). */
   touch-action: pan-x pan-y;
+}
+
+/* Reserve a right-hand gutter for the comment cards; the page centres in the
+   space that's left, so the cards sit beside it (Fit accounts for this width). */
+.preview__scroll--commenting {
+  padding-right: 300px;
+}
+
+/* Comment gutter overlay: a child of the scroll element (so it scrolls with the
+   pages and its coordinates match scroll content), outside the zoom transform.
+   Cards are positioned absolutely by the settle effect. */
+.preview__comments {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.preview__comment-slot {
+  position: absolute;
+  width: 250px;
+  pointer-events: auto;
 }
 
 /* Floating "add comment" button in the right margin of the page area. */

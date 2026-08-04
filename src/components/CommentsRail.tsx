@@ -2,88 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { Comment, CommentAnchor } from '../comments'
 import './CommentsRail.css'
 
-interface CommentsRailProps {
-  comments: Comment[]
-  /** Ids of comments whose anchor no longer resolves in the current text. */
-  brokenIds: Set<string>
-  /** A comment to scroll to and flash (e.g. selecting its text in preview). */
-  focus: { id: string; nonce: number } | null
-  /** Anchor currently being commented on (shows the compose box), or null. */
-  composeAnchor: CommentAnchor | null
-  /** Display name for comments with no explicit author. */
-  authorName: string
-  onCreate: (text: string) => void
-  onCancelCompose: () => void
-  onEdit: (id: string, text: string) => void
-  onDelete: (id: string) => void
-  /** Bring a comment's highlighted text into view. */
-  onFocusComment: (comment: Comment) => void
-}
+// Comment UI pieces. Comments render in the preview's right gutter, each card
+// anchored beside the text it refers to (see Preview.tsx for the positioning).
+// This module exports the compose box and the card; the layout that places them
+// lives with the preview, which owns the page measurements.
 
-export function CommentsRail({
-  comments,
-  brokenIds,
-  focus,
-  composeAnchor,
-  authorName,
-  onCreate,
-  onCancelCompose,
-  onEdit,
-  onDelete,
-  onFocusComment,
-}: CommentsRailProps) {
-  const listRef = useRef<HTMLDivElement>(null)
-
-  // Scroll a focused comment into view and briefly flash it.
-  useEffect(() => {
-    if (focus === null || listRef.current === null) return
-    const card = listRef.current.querySelector<HTMLElement>(
-      `[data-comment-id="${focus.id}"]`,
-    )
-    if (card === null) return
-    card.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    card.classList.add('comments__card--flash')
-    const timer = window.setTimeout(
-      () => card.classList.remove('comments__card--flash'),
-      1200,
-    )
-    return () => window.clearTimeout(timer)
-  }, [focus])
-
-  return (
-    <aside className="comments" aria-label="Comments">
-      <div className="comments__header">Comments</div>
-      <div className="comments__list" ref={listRef}>
-        {composeAnchor !== null && (
-          <Compose
-            anchor={composeAnchor}
-            onCreate={onCreate}
-            onCancel={onCancelCompose}
-          />
-        )}
-        {comments.length === 0 && composeAnchor === null ? (
-          <p className="comments__empty">
-            Select text in the preview to add a comment.
-          </p>
-        ) : (
-          comments.map((c) => (
-            <Card
-              key={c.id}
-              comment={c}
-              broken={brokenIds.has(c.id)}
-              authorName={authorName}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onFocus={onFocusComment}
-            />
-          ))
-        )}
-      </div>
-    </aside>
-  )
-}
-
-function Compose({
+export function CommentCompose({
   anchor,
   onCreate,
   onCancel,
@@ -132,26 +56,38 @@ function Compose({
   )
 }
 
-function Card({
+export function CommentCard({
   comment,
   broken,
   authorName,
+  flash,
   onEdit,
   onDelete,
   onFocus,
+  onLayoutChange,
 }: {
   comment: Comment
   broken: boolean
   authorName: string
+  /** Briefly highlight the card (e.g. when its text is selected in the page). */
+  flash: boolean
   onEdit: (id: string, text: string) => void
   onDelete: (id: string) => void
   onFocus: (comment: Comment) => void
+  /** Fired when the card's height may have changed, so the gutter can re-flow. */
+  onLayoutChange: () => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(comment.text)
 
   const author = comment.author ?? authorName
+
+  // Height changes when the card collapses or enters/leaves edit mode; let the
+  // gutter re-flow so cards below don't overlap.
+  useEffect(() => {
+    onLayoutChange()
+  }, [collapsed, editing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveEdit = () => {
     const trimmed = draft.trim()
@@ -161,7 +97,9 @@ function Card({
 
   return (
     <div
-      className={`comments__card${broken ? ' comments__card--broken' : ''}`}
+      className={`comments__card${broken ? ' comments__card--broken' : ''}${
+        flash ? ' comments__card--flash' : ''
+      }`}
       data-comment-id={comment.id}
     >
       <div className="comments__card-head">

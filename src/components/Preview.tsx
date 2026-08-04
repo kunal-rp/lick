@@ -1,8 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { CSSProperties } from 'react'
 import { parse, renderEmphasis, type Section } from '../fountain'
 import { LINES_PER_PAGE } from '../pagination'
-import { CommentsRail } from './CommentsRail'
+import { CommentCard, CommentCompose } from './CommentsRail'
 import type { Comment, CommentAnchor } from '../comments'
 import { useIsMobile } from '../useIsMobile'
 import './Preview.css'
@@ -180,13 +187,27 @@ export function Preview({
   const [composeAnchor, setComposeAnchor] = useState<CommentAnchor | null>(null)
   // Ids of comments whose anchor no longer resolves in the current text.
   const [brokenIds, setBrokenIds] = useState<Set<string>>(new Set())
-  // A comment to scroll to + flash in the rail (e.g. selecting commented text).
+  // A comment to scroll to + flash (e.g. selecting its text in the page).
   const [commentFocus, setCommentFocus] = useState<{
     id: string
     nonce: number
   } | null>(null)
 
   const commentingEnabled = versionId !== null && onAddComment !== undefined
+  // Comments render in a gutter beside the page; on phones there's no room, so
+  // they're desktop-only.
+  const showMarginComments = commentingEnabled && !isMobile
+
+  // Layout of the comment gutter, measured in scroll-content coordinates: the
+  // gutter's left edge, the resolved (collision-avoiding) top of each card, and
+  // the compose box's top. The overlay lives outside the pages' zoom transform.
+  const commentsRef = useRef<HTMLDivElement>(null)
+  const [commentColLeft, setCommentColLeft] = useState(0)
+  const [commentTops, setCommentTops] = useState<Map<string, number>>(new Map())
+  const [composeTop, setComposeTop] = useState<number | null>(null)
+  const [commentsHeight, setCommentsHeight] = useState(0)
+  // The comment currently flashed (briefly highlighted), cleared on a timer.
+  const [flashId, setFlashId] = useState<string | null>(null)
 
   useLayoutEffect(() => {
     const container = measureRef.current
@@ -379,6 +400,90 @@ export function Preview({
     setStickyLabels(labels)
     setStickyLayerHeight(scroll.scrollHeight)
   }, [sectionBands, zoom, sectionById, showSections])
+
+  // Place the comment cards in the right-hand gutter. Each card is anchored to
+  // the vertical position of the text it refers to (measured in scroll-content
+  // coordinates, like the sticky labels); a top-down pass then pushes any
+  // overlapping card down so cards never cover one another. The gutter's left
+  // edge sits just past the page's right edge.
+  const settleComments = useCallback(() => {
+    const scroll = scrollRef.current
+    const pagesEl = pagesRef.current
+    if (scroll === null || pagesEl === null || !showMarginComments) return
+    const scrollRect = scroll.getBoundingClientRect()
+
+    const firstPage = pagesEl.querySelector('.preview__page')
+    const colLeft =
+      firstPage instanceof HTMLElement
+        ? firstPage.getBoundingClientRect().right -
+          scrollRect.left +
+          scroll.scrollLeft +
+          20
+        : 0
+
+    const anchorTop = (line: number): number | null => {
+      const el = pagesEl.querySelector(`.el[data-line="${line}"]`)
+      if (!(el instanceof HTMLElement)) return null
+      return el.getBoundingClientRect().top - scrollRect.top + scroll.scrollTop
+    }
+    const heightOf = (id: string): number => {
+      const card = commentsRef.current?.querySelector(`[data-slot="${id}"]`)
+      return card instanceof HTMLElement ? card.offsetHeight : 96
+    }
+
+    const items = comments
+      .map((c) => ({ id: c.id, anchor: anchorTop(c.startLine) ?? 0 }))
+      .sort((a, b) => a.anchor - b.anchor)
+    const tops = new Map<string, number>()
+    let prevBottom = -Infinity
+    for (const it of items) {
+      const top = Math.max(it.anchor, prevBottom + 10)
+      tops.set(it.id, top)
+      prevBottom = top + heightOf(it.id)
+    }
+
+    setCommentColLeft(colLeft)
+    setCommentTops(tops)
+    setComposeTop(
+      composeAnchor !== null ? (anchorTop(composeAnchor.startLine) ?? 0) : null,
+    )
+    setCommentsHeight(items.length > 0 ? prevBottom + 24 : 0)
+  }, [comments, composeAnchor, showMarginComments])
+
+  // Coalesce re-flows (card expand/collapse, pane resize) into one per frame.
+  const settleRaf = useRef(0)
+  const scheduleSettle = useCallback(() => {
+    if (settleRaf.current !== 0) return
+    settleRaf.current = requestAnimationFrame(() => {
+      settleRaf.current = 0
+      settleComments()
+    })
+  }, [settleComments])
+
+  // Re-place cards when the comments, the composed anchor, or the page layout
+  // (pagination / zoom) change.
+  useLayoutEffect(() => {
+    settleComments()
+  }, [settleComments, pages, zoom])
+
+  // Pane resize shifts the centered page (so the gutter moves) without changing
+  // pagination — re-place on scroll-element resize.
+  useEffect(() => {
+    const scroll = scrollRef.current
+    if (scroll === null || !showMarginComments) return
+    const observer = new ResizeObserver(scheduleSettle)
+    observer.observe(scroll)
+    return () => observer.disconnect()
+  }, [scheduleSettle, showMarginComments])
+
+  // Flash a comment card briefly when its text is selected in the page.
+  useEffect(() => {
+    if (commentFocus === null) return
+    setFlashId(commentFocus.id)
+    const timer = window.setTimeout(() => setFlashId(null), 1200)
+    return () => window.clearTimeout(timer)
+  }, [commentFocus])
+
   // Set once the user zooms by hand (wheel or pinch); the mobile auto-fit then
   // stops overriding their choice on the next resize.
   const userZoomedRef = useRef(false)
@@ -443,10 +548,15 @@ export function Preview({
   const fitZoom = () => {
     const scroll = scrollRef.current
     if (scroll === null) return
-    const textExtentPx = 7.5 * 96 // through the right edge of the text area
-    const available = scroll.clientWidth - 48 // .preview__scroll padding (24px each)
+    const style = getComputedStyle(scroll)
+    const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+    // With comments in the gutter, fit the whole sheet so its right edge (where
+    // the cards attach) stays visible; otherwise fit just the text extent
+    // (through 7.5in), cropping the blank right margin to maximize legible size.
+    const extentPx = (showMarginComments ? 8.5 : 7.5) * 96
+    const available = scroll.clientWidth - padX
     userZoomedRef.current = false // an explicit Fit re-enables mobile auto-fit
-    setZoom(clampZoom(Math.floor((available / textExtentPx) * 100)))
+    setZoom(clampZoom(Math.floor((available / extentPx) * 100)))
   }
 
   // Mobile has no zoom controls, so fit the full page width to the pane
@@ -819,7 +929,12 @@ export function Preview({
         )}
       </div>
       <div className="preview__body">
-        <div className="preview__scroll" ref={scrollRef}>
+        <div
+          className={`preview__scroll${
+            showMarginComments ? ' preview__scroll--commenting' : ''
+          }`}
+          ref={scrollRef}
+        >
           {/* Off-screen single-column layout, used only to measure heights.
               Kept outside the zoom wrapper so pagination stays deterministic. */}
           <div className="preview__measure" ref={measureRef} aria-hidden="true">
@@ -933,25 +1048,54 @@ export function Preview({
               ＋ Comment
             </button>
           )}
-        </div>
 
-        {commentingEnabled && (comments.length > 0 || composeAnchor !== null) && (
-          <CommentsRail
-            comments={comments}
-            brokenIds={brokenIds}
-            focus={commentFocus}
-            composeAnchor={composeAnchor}
-            authorName={authorName}
-            onCreate={(text) => {
-              if (composeAnchor !== null) onAddComment?.(composeAnchor, text)
-              setComposeAnchor(null)
-            }}
-            onCancelCompose={() => setComposeAnchor(null)}
-            onEdit={(id, text) => onEditComment?.(id, text)}
-            onDelete={(id) => onDeleteComment?.(id)}
-            onFocusComment={focusComment}
-          />
-        )}
+          {/* Comment gutter: cards anchored beside the text they annotate. The
+              overlay is a direct child of the scroll element (outside the pages'
+              zoom transform); the settle effect places each card. */}
+          {showMarginComments &&
+            (comments.length > 0 || composeAnchor !== null) && (
+              <div
+                className="preview__comments"
+                ref={commentsRef}
+                style={{ height: commentsHeight || undefined }}
+              >
+                {composeAnchor !== null && composeTop !== null && (
+                  <div
+                    className="preview__comment-slot"
+                    style={{ top: composeTop, left: commentColLeft }}
+                  >
+                    <CommentCompose
+                      anchor={composeAnchor}
+                      onCreate={(text) => {
+                        if (composeAnchor !== null) onAddComment?.(composeAnchor, text)
+                        setComposeAnchor(null)
+                      }}
+                      onCancel={() => setComposeAnchor(null)}
+                    />
+                  </div>
+                )}
+                {comments.map((c) => (
+                  <div
+                    key={c.id}
+                    className="preview__comment-slot"
+                    data-slot={c.id}
+                    style={{ top: commentTops.get(c.id) ?? 0, left: commentColLeft }}
+                  >
+                    <CommentCard
+                      comment={c}
+                      broken={brokenIds.has(c.id)}
+                      authorName={authorName}
+                      flash={flashId === c.id}
+                      onEdit={(id, text) => onEditComment?.(id, text)}
+                      onDelete={(id) => onDeleteComment?.(id)}
+                      onFocus={focusComment}
+                      onLayoutChange={scheduleSettle}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
       </div>
     </div>
   )

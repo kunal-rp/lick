@@ -1,42 +1,5 @@
-.comments {
-  flex: 0 0 280px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: #1f1f1f;
-  border-left: 1px solid #333;
-  color: #ddd;
-}
-
-.comments__header {
-  flex: 0 0 auto;
-  padding: 10px 14px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #999;
-  border-bottom: 1px solid #333;
-}
-
-.comments__list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.comments__empty {
-  margin: 4px 4px;
-  font-size: 12px;
-  font-style: italic;
-  color: #777;
-  line-height: 1.5;
-}
-
+/* Comment cards render in the preview's right-hand gutter (positioned by
+   Preview.tsx); these styles cover the card itself. */
 .comments__card {
   background: #262626;
   border: 1px solid #383838;
