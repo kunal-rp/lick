@@ -1,4 +1,5 @@
 import { parse } from './parse'
+import { parseSections, type Section } from './sections'
 import type { ScreenplayElement } from './types'
 
 // Script analysis for the Characters & Locations panel. Walks the parsed
@@ -36,6 +37,8 @@ export interface LocationInfo {
 export interface ScriptInsights {
   characters: CharacterInfo[]
   locations: LocationInfo[]
+  /** Section ranges declared in the source, in document order. */
+  sections: Section[]
 }
 
 const BEFORE_FIRST_SCENE = '(front matter)'
@@ -66,7 +69,9 @@ function dialogueAfter(elements: ScreenplayElement[], index: number): string {
   return ''
 }
 
-export function buildInsights(elements: ScreenplayElement[]): ScriptInsights {
+export function buildInsights(
+  elements: ScreenplayElement[],
+): Pick<ScriptInsights, 'characters' | 'locations'> {
   const characters = new Map<string, CharacterInfo>()
   const locations = new Map<string, LocationInfo>()
   const characterScenes = new Map<string, Set<number>>()
@@ -132,5 +137,8 @@ export function buildInsights(elements: ScreenplayElement[]): ScriptInsights {
 
 /** Parse Fountain source and roll it up into character/location insights. */
 export function analyzeScript(source: string): ScriptInsights {
-  return buildInsights(parse(source).elements)
+  return {
+    ...buildInsights(parse(source).elements),
+    sections: parseSections(source),
+  }
 }

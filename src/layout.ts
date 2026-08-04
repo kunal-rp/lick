@@ -14,6 +14,8 @@ export interface LayoutPrefs {
   splitLeftPercent: number
   /** Whether the Characters & Locations panel is collapsed. */
   insightsCollapsed: boolean
+  /** Whether section ranges are rendered over the preview pages. */
+  showSections: boolean
 }
 
 const DEFAULTS: LayoutPrefs = {
@@ -21,6 +23,7 @@ const DEFAULTS: LayoutPrefs = {
   navCollapsed: false,
   splitLeftPercent: 50,
   insightsCollapsed: false,
+  showSections: false,
 }
 
 export function loadLayout(): LayoutPrefs {
@@ -45,6 +48,10 @@ export function loadLayout(): LayoutPrefs {
           typeof parsed.insightsCollapsed === 'boolean'
             ? parsed.insightsCollapsed
             : DEFAULTS.insightsCollapsed,
+        showSections:
+          typeof parsed.showSections === 'boolean'
+            ? parsed.showSections
+            : DEFAULTS.showSections,
       }
     }
   } catch {

@@ -1,11 +1,13 @@
 import type { ScreenplayElement, Screenplay, TitlePageField } from './types'
+import { SECTION_MARKER } from './sections'
 
 // Fountain 1.1 parser (https://fountain.io/syntax).
 //
 // Covers the body elements a screenplay renders: scene headings, action,
 // character cues, dialogue, parentheticals, transitions, centered text, lyrics,
 // and forced page breaks. Structural, non-printing markers (sections `#`,
-// synopses `=`) are recognised and dropped; a leading title page is skipped.
+// synopses `=`, and this editor's `{{section:…}}`/`{{/section}}` range markers)
+// are recognised and dropped; a leading title page is skipped.
 //
 // Every emitted element records `line`, the 0-based index of the source line
 // where it begins, in the ORIGINAL source coordinates (nothing that would shift
@@ -197,6 +199,14 @@ function classifyBlock(
 /** Parse raw Fountain text into a structured {@link Screenplay}. */
 export function parse(source: string): Screenplay {
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
+
+  // Blank out section-range markers ({{section:…}} / {{/section}}) so they
+  // never render as action. Blanking in place (rather than removing) keeps
+  // every element's `line` in original source coordinates, and an empty line
+  // also separates blocks, so a marker never merges into an adjacent block.
+  for (let i = 0; i < lines.length; i++) {
+    if (SECTION_MARKER.test(lines[i])) lines[i] = ''
+  }
 
   const { fields: titlePage, bodyStart } = parseTitlePage(lines)
 

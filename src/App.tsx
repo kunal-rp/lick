@@ -24,6 +24,7 @@ import {
   parseVersions,
   versionFileName,
 } from './drive/versions'
+import { parseSections } from './fountain'
 import { buildScreenplayPdf } from './pdf'
 import {
   COMMENTS_FILENAME,
@@ -96,6 +97,8 @@ export default function App() {
   // Whether the preview is shown (toggled from the editor toolbar). The
   // Characters & Locations panel accompanies it (collapsible).
   const [showPreview, setShowPreview] = useState(layoutRef.current.showPreview)
+  // Whether section ranges are rendered over the preview pages (toolbar toggle).
+  const [showSections, setShowSections] = useState(layoutRef.current.showSections)
   // Jump-to-line request forwarded to the editor; the nonce lets the same
   // line re-fire on repeated clicks.
   const [jump, setJump] = useState<{ line: number; nonce: number } | null>(null)
@@ -144,6 +147,9 @@ export default function App() {
     [versionsByScript, selectedScriptId],
   )
   const dirty = content !== null && source !== content
+  // Section ranges parsed from the live source, shared by the editor (tinted
+  // bands), the preview (optional rendering), and the insights panel.
+  const sections = useMemo(() => parseSections(source), [source])
 
   // Load the whole tree once signed in and a folder is chosen; auto-select the
   // first script and its most recent version. Gated on auth so a restored
@@ -210,8 +216,9 @@ export default function App() {
   useEffect(() => {
     layoutRef.current.showPreview = showPreview
     layoutRef.current.navCollapsed = navCollapsed
+    layoutRef.current.showSections = showSections
     saveLayout(layoutRef.current)
-  }, [showPreview, navCollapsed])
+  }, [showPreview, navCollapsed, showSections])
 
   // Entering mobile width, collapse the nav to its floating button so the
   // editor fills the screen; the drawer is a tap away.
@@ -646,6 +653,7 @@ export default function App() {
                     initialValue={content}
                     onChange={setSource}
                     pageBreakLines={pageBreakLines}
+                    sections={sections}
                     jumpTo={jump}
                     initialScrollTop={
                       selectedVersionId !== null
@@ -677,6 +685,9 @@ export default function App() {
                     onPageBreaks={setPageBreakLines}
                     onJump={jumpToLine}
                     reveal={reveal}
+                    sections={sections}
+                    showSections={showSections}
+                    onToggleSections={() => setShowSections((v) => !v)}
                     versionId={selectedVersionId}
                     comments={comments.filter(
                       (c) => c.versionId === selectedVersionId,

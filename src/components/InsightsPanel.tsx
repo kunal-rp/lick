@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { analyzeScript, type Reference } from '../fountain'
+import { analyzeScript, type Reference, type Section } from '../fountain'
 import './InsightsPanel.css'
 
 interface InsightsPanelProps {
@@ -26,7 +26,7 @@ export function InsightsPanel({
   initialCollapsed = false,
   onCollapsedChange,
 }: InsightsPanelProps) {
-  const { characters, locations } = useMemo(
+  const { characters, locations, sections } = useMemo(
     () => analyzeScript(source),
     [source],
   )
@@ -60,11 +60,29 @@ export function InsightsPanel({
         <span className="insights__title">Characters &amp; Locations</span>
         <span className="insights__summary">
           {characters.length} chars · {locations.length} locs
+          {sections.length > 0 && ` · ${sections.length} sec`}
         </span>
       </button>
 
       {!collapsed && (
         <div className="insights__body">
+          {sections.length > 0 && (
+            <Group title="Sections" count={sections.length}>
+              {sections.map((s) => {
+                const key = `sec:${s.id}`
+                return (
+                  <SectionRow
+                    key={key}
+                    section={s}
+                    open={expanded.has(key)}
+                    onToggle={() => toggle(key)}
+                    onJump={onJump}
+                  />
+                )
+              })}
+            </Group>
+          )}
+
           <Group title="Characters" count={characters.length}>
             {characters.map((c) => {
               const key = `char:${c.name}`
@@ -136,6 +154,90 @@ function Group({
         <p className="insights__empty">None found.</p>
       ) : (
         <div className="insights__list">{children}</div>
+      )}
+    </div>
+  )
+}
+
+function SectionRow({
+  section,
+  open,
+  onToggle,
+  onJump,
+}: {
+  section: Section
+  open: boolean
+  onToggle: () => void
+  onJump?: (line: number) => void
+}) {
+  const span =
+    section.startLine === section.endLine
+      ? `L${section.startLine + 1}`
+      : `L${section.startLine + 1}–L${section.endLine + 1}`
+  // Indent nested ranges so the hierarchy reads at a glance.
+  const indent = { marginLeft: section.depth * 12 }
+  return (
+    <div
+      className={`insights__entity insights__entity--section${
+        open ? ' insights__entity--open' : ''
+      }`}
+      style={indent}
+    >
+      <button
+        type="button"
+        className="insights__entity-head"
+        onClick={onToggle}
+        aria-expanded={open}
+      >
+        <span className="insights__entity-chevron">{open ? '▾' : '▸'}</span>
+        <span
+          className="insights__section-swatch"
+          style={{ background: section.color }}
+          aria-hidden="true"
+        />
+        <span className="insights__entity-name">{section.label}</span>
+        <span className="insights__badges">
+          <span className="insights__badge" title="source line span">
+            {span}
+          </span>
+        </span>
+      </button>
+      {open && (
+        <div className="insights__section-body">
+          {section.description !== '' && (
+            <p className="insights__section-desc">{section.description}</p>
+          )}
+          <ul className="insights__refs">
+            <li>
+              <button
+                type="button"
+                className="insights__ref"
+                title="Jump to the start of this section"
+                onClick={() => onJump?.(section.startLine)}
+              >
+                <span className="insights__ref-meta">
+                  <span className="insights__ref-scene">Start</span>
+                  <span className="insights__ref-line">L{section.startLine + 1}</span>
+                </span>
+                <span className="insights__ref-snippet">{section.label}</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className="insights__ref"
+                title="Jump to the end of this section"
+                onClick={() => onJump?.(section.endLine)}
+              >
+                <span className="insights__ref-meta">
+                  <span className="insights__ref-scene">End</span>
+                  <span className="insights__ref-line">L{section.endLine + 1}</span>
+                </span>
+                <span className="insights__ref-snippet">{section.label}</span>
+              </button>
+            </li>
+          </ul>
+        </div>
       )}
     </div>
   )

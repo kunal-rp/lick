@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { parse, renderEmphasis } from '../fountain'
+import { parse, renderEmphasis, type Section } from '../fountain'
 import { LINES_PER_PAGE } from '../pagination'
 import { CommentsRail } from './CommentsRail'
 import type { Comment, CommentAnchor } from '../comments'
@@ -15,6 +15,12 @@ interface PreviewProps {
   onJump?: (line: number) => void
   /** Scroll the preview to a source line (editor double-click → reveal). */
   reveal?: { line: number; nonce: number } | null
+  /** Section ranges parsed from the source (for optional in-preview rendering). */
+  sections?: Section[]
+  /** Whether section tints/labels are drawn over the pages. */
+  showSections?: boolean
+  /** Toggle the section rendering (wired to the toolbar button). */
+  onToggleSections?: () => void
   /** Comments anchored to the version currently shown. */
   comments?: Comment[]
   /** The version id to anchor new comments to (null hides commenting). */
@@ -111,6 +117,9 @@ export function Preview({
   onPageBreaks,
   onJump,
   reveal = null,
+  sections = [],
+  showSections = false,
+  onToggleSections,
   comments = [],
   versionId = null,
   authorName = 'You',
@@ -128,6 +137,16 @@ export function Preview({
   const reportedBreaks = useRef<string>('')
   // Each entry is a page: the indices (into `rows`) that land on it.
   const [pages, setPages] = useState<number[][]>([])
+
+  // Section tint bands, measured from the laid-out pages: one entry per page,
+  // each a list of colored rectangles drawn behind the text. A run of
+  // consecutive same-section elements yields one band spanning their extent;
+  // the run touching the top (or bottom) of a page extends to that edge, so the
+  // color fills the sheet's margins and any trailing blank space. Populated by
+  // the layout effect below; empty unless the toggle is on.
+  const [sectionBands, setSectionBands] = useState<
+    { top: number; height: number; color: string }[][]
+  >([])
 
   // A selection awaiting a comment: its anchor + vertical position for the
   // floating "+ Comment" button. Cleared once composing or dismissed.
@@ -205,6 +224,77 @@ export function Preview({
       onPageBreaks(breakLines)
     }
   }, [rows, onPageBreaks])
+
+  // Measure section tint bands off the laid-out pages. For each page, walk its
+  // elements in order, group consecutive ones sharing the same innermost
+  // section, and record a band spanning each group's vertical extent. A group
+  // that reaches the first (or last) element of the page is stretched to the
+  // page's top (or bottom) edge, so the color fills the sheet margins and any
+  // blank tail. Offsets are layout values (pre-transform), matching the page's
+  // own coordinate space, so the zoom scale needs no correction. Re-runs after
+  // pagination (which is deterministic at a fixed page width, so pane resizes
+  // don't reflow it).
+  useLayoutEffect(() => {
+    const container = pagesRef.current
+    if (container === null) return
+    if (!showSections || sections.length === 0) {
+      setSectionBands((prev) => (prev.length === 0 ? prev : []))
+      return
+    }
+    const sectionForLine = (line: number): Section | undefined => {
+      let best: Section | undefined
+      for (const s of sections) {
+        if (
+          line >= s.startLine &&
+          line <= s.endLine &&
+          (best === undefined || s.depth > best.depth)
+        ) {
+          best = s
+        }
+      }
+      return best
+    }
+
+    // Only the content pages, in order — the title page is a separate
+    // `.preview__page` and would otherwise offset every index from `pages`.
+    const pageEls = Array.from(
+      container.querySelectorAll('.preview__page:not(.preview__title)'),
+    ) as HTMLElement[]
+    const result: { top: number; height: number; color: string }[][] = []
+    for (const pageEl of pageEls) {
+      const els = Array.from(
+        pageEl.querySelectorAll('.el[data-line]'),
+      ) as HTMLElement[]
+      const pageH = pageEl.offsetHeight
+      const bands: { top: number; height: number; color: string }[] = []
+      let i = 0
+      while (i < els.length) {
+        const section = sectionForLine(Number(els[i].getAttribute('data-line')))
+        if (section === undefined) {
+          i++
+          continue
+        }
+        const startIdx = i
+        let top = Infinity
+        let bottom = -Infinity
+        while (
+          i < els.length &&
+          sectionForLine(Number(els[i].getAttribute('data-line')))?.id ===
+            section.id
+        ) {
+          const el = els[i]
+          top = Math.min(top, el.offsetTop)
+          bottom = Math.max(bottom, el.offsetTop + el.offsetHeight)
+          i++
+        }
+        if (startIdx === 0) top = 0
+        if (i === els.length) bottom = pageH
+        bands.push({ top, height: bottom - top, color: section.color })
+      }
+      result.push(bands)
+    }
+    setSectionBands(result)
+  }, [pages, sections, showSections])
 
   // Preview magnification, as a percentage (100 = actual size).
   const [zoom, setZoom] = useState(100)
@@ -636,6 +726,19 @@ export function Preview({
         >
           Fit
         </button>
+        {sections.length > 0 && onToggleSections !== undefined && (
+          <button
+            type="button"
+            className={`preview__sections-toggle${
+              showSections ? ' preview__sections-toggle--active' : ''
+            }`}
+            onClick={onToggleSections}
+            aria-pressed={showSections}
+            title="Show or hide section ranges"
+          >
+            Sections
+          </button>
+        )}
       </div>
       <div className="preview__body">
         <div className="preview__scroll" ref={scrollRef}>
@@ -673,14 +776,34 @@ export function Preview({
                       <p className="preview__empty">Nothing to preview yet.</p>
                     </div>
                   )
-                : pages.map((group, p) => (
-                    <div className="preview__page" key={p}>
-                      {p > 0 && (
-                        <span className="preview__page-number">{p + 1}.</span>
-                      )}
-                      {group.map(renderRow)}
-                    </div>
-                  ))}
+                : pages.map((group, p) => {
+                    const bands = sectionBands[p]
+                    return (
+                      <div className="preview__page" key={p}>
+                        {bands !== undefined && bands.length > 0 && (
+                          <div className="preview__section-bg" aria-hidden="true">
+                            {bands.map((b, bi) => (
+                              <div
+                                key={bi}
+                                className="preview__section-band"
+                                style={
+                                  {
+                                    top: b.top,
+                                    height: b.height,
+                                    '--section-color': b.color,
+                                  } as CSSProperties
+                                }
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {p > 0 && (
+                          <span className="preview__page-number">{p + 1}.</span>
+                        )}
+                        {group.map(renderRow)}
+                      </div>
+                    )
+                  })}
             </div>
           </div>
 

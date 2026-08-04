@@ -77,6 +77,39 @@ export function rangeAtOffset(root: HTMLElement, offset: number): Range | null {
   return null
 }
 
+/**
+ * Viewport `top` of an absolute character offset within the contentEditable,
+ * walking text nodes and <br> line breaks (each <br> contributes one "\n").
+ * An empty line is located via the <br>'s own box: a collapsed range placed
+ * there reports a zero rect in Chrome, whereas the <br> element has a real one.
+ * Returns null if the offset can't be located.
+ */
+export function topOfOffset(root: HTMLElement, target: number): number | null {
+  const walker = document.createTreeWalker(
+    root,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+  )
+  let acc = 0
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.nodeValue?.length ?? 0
+      if (target <= acc + len) {
+        const range = document.createRange()
+        range.setStart(node, target - acc)
+        range.collapse(true)
+        const rects = range.getClientRects()
+        const rect = rects.length > 0 ? rects[0] : range.getBoundingClientRect()
+        return rect.top
+      }
+      acc += len
+    } else if (node.nodeName === 'BR') {
+      if (target === acc) return (node as HTMLElement).getBoundingClientRect().top
+      acc += 1
+    }
+  }
+  return null
+}
+
 /** Scroll the given absolute offset toward the top of the editor's surface. */
 export function scrollOffsetIntoView(
   editor: LexicalEditor,

@@ -66,6 +66,48 @@
   color: #fff;
 }
 
+.preview__sections-toggle {
+  padding: 3px 10px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: transparent;
+  color: #ccc;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.preview__sections-toggle:hover {
+  background: #333;
+  color: #fff;
+}
+
+.preview__sections-toggle--active,
+.preview__sections-toggle--active:hover {
+  background: #a0643a;
+  border-color: #a0643a;
+  color: #fff;
+}
+
+/* Section-range tint: colored bands painted behind the script text, filling
+   the full sheet width and reaching the page's top/bottom edges. The layer sits
+   at a negative z-index within the page's own stacking context (see the
+   `isolation` on .preview__page), so it covers the white sheet but never the
+   text — and adds no box to the flow, so nothing shifts. */
+.preview__section-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.preview__section-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: color-mix(in srgb, var(--section-color) 15%, #fff);
+}
+
 /* Mobile: no zoom controls — the pages fit the narrow pane on their own. */
 @media (max-width: 768px) {
   .preview__toolbar {
@@ -182,6 +224,9 @@
 
 .preview__page {
   position: relative;
+  /* Own stacking context so the section tint layer (z-index: -1) paints above
+     the white sheet but below the text, without escaping to other pages. */
+  isolation: isolate;
   width: 8.5in;
   min-height: 11in;
   margin: 0 auto 24px;

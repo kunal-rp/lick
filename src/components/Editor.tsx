@@ -14,8 +14,10 @@ import { Toolbar, type ViewToggle } from './lexical/Toolbar'
 import { OnChangeFountainPlugin } from './lexical/plugins/OnChangeFountainPlugin'
 import { EmphasisShortcutsPlugin } from './lexical/plugins/EmphasisShortcutsPlugin'
 import { PageBreakGuidesPlugin } from './lexical/plugins/PageBreakGuidesPlugin'
+import { SectionBackgroundsPlugin } from './lexical/plugins/SectionBackgroundsPlugin'
 import { JumpToLinePlugin } from './lexical/plugins/JumpToLinePlugin'
 import { RevealPreviewPlugin } from './lexical/plugins/RevealPreviewPlugin'
+import type { Section } from '../fountain'
 import './Editor.css'
 
 interface EditorProps {
@@ -25,6 +27,8 @@ interface EditorProps {
   onChange: (value: string) => void
   /** Source line indices where the preview breaks a page (drawn as guides). */
   pageBreakLines: number[]
+  /** Section ranges to paint as tinted background bands behind the text. */
+  sections?: Section[]
   /** View panels the toolbar can show/hide (e.g. Preview). */
   viewToggles?: ViewToggle[]
   /** Request to move the caret to a source line and scroll it into view. */
@@ -63,6 +67,7 @@ export function Editor({
   initialValue,
   onChange,
   pageBreakLines,
+  sections = [],
   viewToggles,
   jumpTo,
   initialScrollTop,
@@ -105,6 +110,7 @@ export function Editor({
       <LexicalComposer initialConfig={initialConfig}>
         <Toolbar viewToggles={viewToggles} />
         <div className="editor__surface" ref={surfaceRef} onScroll={handleScroll}>
+          <SectionBackgroundsPlugin sections={sections} />
           <PageBreakGuidesPlugin breakLines={pageBreakLines} />
           <PlainTextPlugin
             contentEditable={

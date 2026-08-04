@@ -273,6 +273,65 @@
   opacity: 0.7;
 }
 
+/* Section ranges: a tinted band behind the text, from the start marker to the
+ * end marker, with a colored left stripe. Nested ranges inset from the left. */
+.editor__sections {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.editor__section-band {
+  position: absolute;
+  right: 0;
+  border-left: 2px solid var(--section-color);
+  background: color-mix(in srgb, var(--section-color) 13%, transparent);
+}
+
+/* Label chips ride above the text so they stay legible; the marker line's own
+ * text is short and left-aligned, so a right-pinned chip clears it. */
+.editor__section-labels {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Each track spans a band's full height and pins to the right; the label inside
+ * it is sticky, so it stays at the top of the scroll viewport while any of the
+ * band is visible, then rides the band's bottom out of view. */
+.editor__section-label-track {
+  position: absolute;
+  right: 12px;
+  max-width: 45%;
+}
+
+/* Shared pill look with the preview's section labels (see Preview.css); only
+ * the surface/text tokens differ so it sits on the themed editor background. */
+.editor__section-label {
+  position: sticky;
+  top: 8px;
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--section-color) 22%, var(--panel-bg));
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid color-mix(in srgb, var(--section-color) 55%, transparent);
+}
+
 .editor__placeholder {
   position: absolute;
   top: 20px;
