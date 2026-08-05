@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Editor } from './components/Editor'
 import { Preview } from './components/Preview'
 import { InsightsPanel } from './components/InsightsPanel'
@@ -139,6 +139,25 @@ export default function App() {
   // Tracks the current version so an in-flight save doesn't clobber content
   // after the user switches versions mid-save.
   const currentVersionIdRef = useRef<string | null>(null)
+  // The editor's live text and the version it was loaded from, updated together
+  // so a save always writes to the file the text actually came from. Selection
+  // (`selectedVersionId`) flips the instant the user clicks another version, but
+  // the text only catches up once that version's file finishes loading; without
+  // this pairing a save landing in that gap would write the outgoing version's
+  // text into the incoming version's file. See persist().
+  const sourceRef = useRef('')
+  const sourceVersionIdRef = useRef<string | null>(null)
+  // Live mirror of `content` (the last-saved baseline) for the async save
+  // guard, so a stale closure can't misjudge whether there's anything to save.
+  const contentRef = useRef<string | null>(null)
+
+  // Editor edits: keep the live text ref in step with `source`. The owning
+  // version is deliberately left alone here — typing never changes which file
+  // the text belongs to; only loading a version does (see the load effect).
+  const handleSourceChange = useCallback((text: string) => {
+    sourceRef.current = text
+    setSource(text)
+  }, [])
 
   const folderId = folder?.id ?? null
   const selectedScript = scripts.find((s) => s.id === selectedScriptId) ?? null
@@ -263,20 +282,34 @@ export default function App() {
   useEffect(() => {
     if (selectedVersionId === null) {
       setContent(null)
+      contentRef.current = null
       setSource('')
+      sourceRef.current = ''
+      sourceVersionIdRef.current = null
       return
     }
+    // This version's content is already loaded in the editor. The effect also
+    // re-runs when `versionsByScript` changes (e.g. after saving a comment or
+    // creating a version) — reloading here would overwrite the editor with the
+    // last-saved text and silently discard any unsaved edits, so bail out.
+    if (selectedVersionId === sourceVersionIdRef.current) return
     const file = Object.values(versionsByScript)
       .flat()
       .find((f) => f.id === selectedVersionId)
     if (file === undefined) return
     let active = true
     setContent(null)
+    contentRef.current = null
     readFile(file)
       .then((text) => {
         if (!active) return
         setContent(text)
+        contentRef.current = text
         setSource(text)
+        // Bind the loaded text to the version it came from (must be set
+        // together with the text so a save can never cross versions).
+        sourceRef.current = text
+        sourceVersionIdRef.current = file.id
         // Fresh version: reset auto-save bookkeeping.
         changeCountRef.current = 0
         lastSavedAtRef.current = Date.now()
@@ -288,7 +321,11 @@ export default function App() {
         console.error('[drive] read version failed:', err)
         setError(String(err instanceof Error ? err.message : err))
         setContent('')
+        contentRef.current = ''
         setSource('')
+        sourceRef.current = ''
+        // No trustworthy text loaded — disown so a save can't fire for it.
+        sourceVersionIdRef.current = null
       })
     return () => {
       active = false
@@ -383,16 +420,28 @@ export default function App() {
   // content if the user switched versions during the save.
   async function persist() {
     if (savingRef.current) return
-    const versionId = selectedVersionId
+    // Write the editor text to the version it was actually loaded from, read
+    // together from refs so they can't be a mismatched (version, text) pair.
+    const versionId = sourceVersionIdRef.current
     if (versionId === null) return
-    const text = source
-    if (text === content) return
+    // Refuse to save while a version switch is mid-flight: if the loaded text no
+    // longer belongs to the selected version, saving it would write one
+    // version's contents into another version's file.
+    if (versionId !== currentVersionIdRef.current) return
+    const text = sourceRef.current
+    if (text === contentRef.current) return
     savingRef.current = true
     setSaveState('saving')
     try {
       await updateFileContent(versionId, text)
-      if (currentVersionIdRef.current === versionId) {
+      // Update the baseline only if the text still belongs to this version and
+      // it's still selected — otherwise the switched-to version owns the state.
+      if (
+        currentVersionIdRef.current === versionId &&
+        sourceVersionIdRef.current === versionId
+      ) {
         setContent(text)
+        contentRef.current = text
         changeCountRef.current = 0
         lastSavedAtRef.current = Date.now()
         setSavedAt(Date.now())
@@ -421,20 +470,30 @@ export default function App() {
     }
   }
 
-  function selectScript(script: DriveFile) {
-    void persist() // flush any unsaved edits to the outgoing version first
-    setSelectedScriptId(script.id)
-    setExpandedScripts((prev) => new Set(prev).add(script.id))
-    const latest = parseVersions(versionsByScript[script.id] ?? [])[0]
-    setSelectedVersionId(latest?.file.id ?? null)
-    if (isMobile) setNavCollapsed(true) // close the drawer, reveal the editor
-  }
-
-  function selectVersion(scriptId: string, versionId: string) {
-    void persist() // flush any unsaved edits to the outgoing version first
+  // Open a version: flush the outgoing one, then clear the editor so it shows a
+  // loader instead of briefly remounting with the previous version's text while
+  // the new one loads. Only clears on an actual change of version — re-selecting
+  // the same version must not strand the editor (the load effect would skip the
+  // already-loaded version and never restore content).
+  function openVersion(scriptId: string, versionId: string | null) {
+    if (versionId !== selectedVersionId) {
+      void persist() // flush any unsaved edits to the outgoing version first
+      setContent(null)
+      contentRef.current = null
+    }
     setSelectedScriptId(scriptId)
     setSelectedVersionId(versionId)
     if (isMobile) setNavCollapsed(true) // close the drawer, reveal the editor
+  }
+
+  function selectScript(script: DriveFile) {
+    setExpandedScripts((prev) => new Set(prev).add(script.id))
+    const latest = parseVersions(versionsByScript[script.id] ?? [])[0]
+    openVersion(script.id, latest?.file.id ?? null)
+  }
+
+  function selectVersion(scriptId: string, versionId: string) {
+    openVersion(scriptId, versionId)
   }
 
   function toggleExpand(scriptId: string) {
@@ -651,7 +710,7 @@ export default function App() {
                   <Editor
                     key={selectedVersionId}
                     initialValue={content}
-                    onChange={setSource}
+                    onChange={handleSourceChange}
                     pageBreakLines={pageBreakLines}
                     sections={sections}
                     jumpTo={jump}
