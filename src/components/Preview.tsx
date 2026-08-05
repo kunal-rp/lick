@@ -167,6 +167,7 @@ export function Preview({
       top: number
       height: number
       left: number
+      maxWidth: number
     }[]
   >([])
   const [stickyLayerHeight, setStickyLayerHeight] = useState(0)
@@ -383,6 +384,11 @@ export function Preview({
       }
     }
 
+    // The page has a blank 1.5in left margin before the text column (scaled by
+    // zoom, since bands are measured on-screen). Sit the pill in that margin and
+    // cap its width to the margin so it never reaches — or covers — the script
+    // text. Width depends only on zoom, so it can't feed back into scroll size.
+    const marginPx = 1.5 * 96 * (zoom / 100)
     const labels = []
     for (const [sid, ext] of byId) {
       const s = sectionById.get(sid)
@@ -394,7 +400,8 @@ export function Preview({
         color: s.color,
         top: ext.top,
         height: ext.bottom - ext.top,
-        left: ext.left + 14,
+        left: ext.left + 8,
+        maxWidth: Math.max(64, marginPx - 16),
       })
     }
     setStickyLabels(labels)
@@ -959,10 +966,18 @@ export function Preview({
                 >
                   <span
                     className="preview__section-label"
-                    style={{ '--section-color': l.color } as CSSProperties}
+                    style={
+                      {
+                        '--section-color': l.color,
+                        maxWidth: l.maxWidth,
+                      } as CSSProperties
+                    }
                   >
                     <span className="preview__section-label-name">{l.label}</span>
-                    {l.description !== '' && (
+                    {/* Only show the description when the margin is wide enough
+                        for it to be legible; at fit-width it would truncate to a
+                        stray letter, so the title stands alone. */}
+                    {l.description !== '' && l.maxWidth >= 200 && (
                       <span className="preview__section-label-desc">
                         {l.description}
                       </span>
