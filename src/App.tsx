@@ -731,6 +731,11 @@ export default function App() {
                             layoutRef.current.insightsCollapsed = collapsed
                             saveLayout(layoutRef.current)
                           }}
+                          initialGroups={layoutRef.current.insightsGroups}
+                          onGroupsChange={(groups) => {
+                            layoutRef.current.insightsGroups = groups
+                            saveLayout(layoutRef.current)
+                          }}
                         />
                       </div>
                     }

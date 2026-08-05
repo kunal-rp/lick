@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { analyzeScript, type Reference, type Section } from '../fountain'
+import type { InsightsGroups } from '../layout'
 import './InsightsPanel.css'
 
 interface InsightsPanelProps {
@@ -12,6 +13,16 @@ interface InsightsPanelProps {
   initialCollapsed?: boolean
   /** Reports the collapsed state when the user toggles it. */
   onCollapsedChange?: (collapsed: boolean) => void
+  /** Which groups are shown, restored from saved layout. */
+  initialGroups?: InsightsGroups
+  /** Reports group visibility when the user toggles a chip. */
+  onGroupsChange?: (groups: InsightsGroups) => void
+}
+
+const ALL_GROUPS: InsightsGroups = {
+  sections: true,
+  characters: true,
+  locations: true,
 }
 
 /**
@@ -25,12 +36,15 @@ export function InsightsPanel({
   onJump,
   initialCollapsed = false,
   onCollapsedChange,
+  initialGroups = ALL_GROUPS,
+  onGroupsChange,
 }: InsightsPanelProps) {
   const { characters, locations, sections } = useMemo(
     () => analyzeScript(source),
     [source],
   )
   const [collapsed, setCollapsed] = useState(initialCollapsed)
+  const [groups, setGroups] = useState<InsightsGroups>(initialGroups)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const toggle = (key: string) =>
@@ -38,6 +52,13 @@ export function InsightsPanel({
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
+      return next
+    })
+
+  const toggleGroup = (key: keyof InsightsGroups) =>
+    setGroups((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      onGroupsChange?.(next)
       return next
     })
 
@@ -58,15 +79,40 @@ export function InsightsPanel({
       >
         <span className="insights__chevron">{collapsed ? '▸' : '▾'}</span>
         <span className="insights__title">Characters &amp; Locations</span>
-        <span className="insights__summary">
-          {characters.length} chars · {locations.length} locs
-          {sections.length > 0 && ` · ${sections.length} sec`}
-        </span>
+        {collapsed && (
+          <span className="insights__summary">
+            {characters.length} chars · {locations.length} locs
+            {sections.length > 0 && ` · ${sections.length} sec`}
+          </span>
+        )}
       </button>
 
       {!collapsed && (
+        <div className="insights__toggles" role="group" aria-label="Show groups">
+          <GroupToggle
+            label="Sections"
+            count={sections.length}
+            active={groups.sections}
+            onToggle={() => toggleGroup('sections')}
+          />
+          <GroupToggle
+            label="Characters"
+            count={characters.length}
+            active={groups.characters}
+            onToggle={() => toggleGroup('characters')}
+          />
+          <GroupToggle
+            label="Locations"
+            count={locations.length}
+            active={groups.locations}
+            onToggle={() => toggleGroup('locations')}
+          />
+        </div>
+      )}
+
+      {!collapsed && (
         <div className="insights__body">
-          {sections.length > 0 && (
+          {groups.sections && sections.length > 0 && (
             <Group title="Sections" count={sections.length}>
               {sections.map((s) => {
                 const key = `sec:${s.id}`
@@ -83,55 +129,90 @@ export function InsightsPanel({
             </Group>
           )}
 
-          <Group title="Characters" count={characters.length}>
-            {characters.map((c) => {
-              const key = `char:${c.name}`
-              return (
-                <Entity
-                  key={key}
-                  name={c.name}
-                  open={expanded.has(key)}
-                  onToggle={() => toggle(key)}
-                  references={c.references}
-                  onJump={onJump}
-                  badges={
-                    <>
-                      <span className="insights__badge" title="dialogue cues">
-                        {c.cues}×
-                      </span>
-                      <span className="insights__badge" title="scenes">
-                        {c.scenes} sc
-                      </span>
-                    </>
-                  }
-                />
-              )
-            })}
-          </Group>
+          {groups.characters && (
+            <Group title="Characters" count={characters.length}>
+              {characters.map((c) => {
+                const key = `char:${c.name}`
+                return (
+                  <Entity
+                    key={key}
+                    name={c.name}
+                    open={expanded.has(key)}
+                    onToggle={() => toggle(key)}
+                    references={c.references}
+                    onJump={onJump}
+                    badges={
+                      <>
+                        <span className="insights__badge" title="dialogue cues">
+                          {c.cues}×
+                        </span>
+                        <span className="insights__badge" title="scenes">
+                          {c.scenes} sc
+                        </span>
+                      </>
+                    }
+                  />
+                )
+              })}
+            </Group>
+          )}
 
-          <Group title="Locations" count={locations.length}>
-            {locations.map((l) => {
-              const key = `loc:${l.name}`
-              return (
-                <Entity
-                  key={key}
-                  name={l.name}
-                  open={expanded.has(key)}
-                  onToggle={() => toggle(key)}
-                  references={l.references}
-                  onJump={onJump}
-                  badges={
-                    <span className="insights__badge" title="scenes">
-                      {l.scenes} sc
-                    </span>
-                  }
-                />
-              )
-            })}
-          </Group>
+          {groups.locations && (
+            <Group title="Locations" count={locations.length}>
+              {locations.map((l) => {
+                const key = `loc:${l.name}`
+                return (
+                  <Entity
+                    key={key}
+                    name={l.name}
+                    open={expanded.has(key)}
+                    onToggle={() => toggle(key)}
+                    references={l.references}
+                    onJump={onJump}
+                    badges={
+                      <span className="insights__badge" title="scenes">
+                        {l.scenes} sc
+                      </span>
+                    }
+                  />
+                )
+              })}
+            </Group>
+          )}
+
+          {!groups.sections && !groups.characters && !groups.locations && (
+            <p className="insights__all-hidden">
+              All groups hidden. Use the toggles above to show them.
+            </p>
+          )}
         </div>
       )}
     </div>
+  )
+}
+
+function GroupToggle({
+  label,
+  count,
+  active,
+  onToggle,
+}: {
+  label: string
+  count: number
+  active: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`insights__toggle${active ? ' insights__toggle--on' : ''}`}
+      onClick={onToggle}
+      aria-pressed={active}
+      title={`${active ? 'Hide' : 'Show'} ${label.toLowerCase()}`}
+    >
+      <span className="insights__toggle-label">{label}</span>
+      <span className="insights__toggle-count">{count}</span>
+    </button>
   )
 }
 

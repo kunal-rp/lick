@@ -48,12 +48,70 @@
 
 .insights__title {
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .insights__summary {
+  flex: 0 0 auto;
   color: var(--text-muted);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+}
+
+/* Chips below the bar that show/hide each group. */
+.insights__toggles {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.insights__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.insights__toggle:hover {
+  background: var(--hover);
+}
+
+.insights__toggle--on {
+  border-color: var(--accent);
+  background: var(--raised);
+  color: var(--text);
+}
+
+.insights__toggle-count {
+  color: var(--text-faint);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.insights__toggle--on .insights__toggle-count {
+  color: var(--text-muted);
+}
+
+.insights__all-hidden {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
 }
 
 /* Characters and Locations sit side by side, each scrolling independently. */

@@ -14,8 +14,23 @@ export interface LayoutPrefs {
   splitLeftPercent: number
   /** Whether the Characters & Locations panel is collapsed. */
   insightsCollapsed: boolean
+  /** Which groups the Characters & Locations panel displays. */
+  insightsGroups: InsightsGroups
   /** Whether section ranges are rendered over the preview pages. */
   showSections: boolean
+}
+
+/** Per-group visibility for the Characters & Locations panel. */
+export interface InsightsGroups {
+  sections: boolean
+  characters: boolean
+  locations: boolean
+}
+
+const DEFAULT_GROUPS: InsightsGroups = {
+  sections: true,
+  characters: true,
+  locations: true,
 }
 
 const DEFAULTS: LayoutPrefs = {
@@ -23,6 +38,7 @@ const DEFAULTS: LayoutPrefs = {
   navCollapsed: false,
   splitLeftPercent: 50,
   insightsCollapsed: false,
+  insightsGroups: { ...DEFAULT_GROUPS },
   showSections: false,
 }
 
@@ -48,6 +64,20 @@ export function loadLayout(): LayoutPrefs {
           typeof parsed.insightsCollapsed === 'boolean'
             ? parsed.insightsCollapsed
             : DEFAULTS.insightsCollapsed,
+        insightsGroups: {
+          sections:
+            typeof parsed.insightsGroups?.sections === 'boolean'
+              ? parsed.insightsGroups.sections
+              : DEFAULT_GROUPS.sections,
+          characters:
+            typeof parsed.insightsGroups?.characters === 'boolean'
+              ? parsed.insightsGroups.characters
+              : DEFAULT_GROUPS.characters,
+          locations:
+            typeof parsed.insightsGroups?.locations === 'boolean'
+              ? parsed.insightsGroups.locations
+              : DEFAULT_GROUPS.locations,
+        },
         showSections:
           typeof parsed.showSections === 'boolean'
             ? parsed.showSections
