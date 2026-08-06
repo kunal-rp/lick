@@ -59,14 +59,19 @@
   gap: 6px;
 }
 
-.comments__chevron {
-  border: none;
-  background: transparent;
-  color: #888;
+/* Author avatar, shared by the collapsed margin marker and this card head. */
+.comments__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #1a1a1a;
   font-size: 10px;
-  cursor: pointer;
-  padding: 0;
-  width: 12px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .comments__author {

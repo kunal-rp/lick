@@ -2,10 +2,43 @@ import { useEffect, useRef, useState } from 'react'
 import type { Comment, CommentAnchor } from '../comments'
 import './CommentsRail.css'
 
-// Comment UI pieces. Comments render in the preview's right gutter, each card
-// anchored beside the text it refers to (see Preview.tsx for the positioning).
-// This module exports the compose box and the card; the layout that places them
-// lives with the preview, which owns the page measurements.
+// Comment UI pieces. Comments render in the preview's right margin as small
+// markers (see Preview.tsx for the positioning) that expand into these cards.
+// This module exports the compose box, the card, and the author avatar shared
+// by both the collapsed marker and the expanded card head.
+
+// Muted palette for author avatars — enough hues to tell commenters apart while
+// staying legible on the dark card. Keyed by a stable hash of the author name.
+const AVATAR_COLORS = [
+  '#d9a066',
+  '#8fb0c9',
+  '#c98a8a',
+  '#a8c98a',
+  '#b79ad9',
+  '#d9c07a',
+  '#8ac9c0',
+]
+
+function authorColor(name: string): string {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+}
+
+/** A round, color-coded initial for a comment's author. Shared by the collapsed
+ *  margin marker and the expanded card head so the two read as one object. */
+export function CommentAvatar({ name }: { name: string }) {
+  const initial = (name.trim()[0] ?? '?').toUpperCase()
+  return (
+    <span
+      className="comments__avatar"
+      style={{ background: authorColor(name) }}
+      aria-hidden="true"
+    >
+      {initial}
+    </span>
+  )
+}
 
 export function CommentCompose({
   anchor,
@@ -64,7 +97,6 @@ export function CommentCard({
   onEdit,
   onDelete,
   onFocus,
-  onLayoutChange,
 }: {
   comment: Comment
   broken: boolean
@@ -74,20 +106,11 @@ export function CommentCard({
   onEdit: (id: string, text: string) => void
   onDelete: (id: string) => void
   onFocus: (comment: Comment) => void
-  /** Fired when the card's height may have changed, so the gutter can re-flow. */
-  onLayoutChange: () => void
 }) {
-  const [collapsed, setCollapsed] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(comment.text)
 
   const author = comment.author ?? authorName
-
-  // Height changes when the card collapses or enters/leaves edit mode; let the
-  // gutter re-flow so cards below don't overlap.
-  useEffect(() => {
-    onLayoutChange()
-  }, [collapsed, editing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveEdit = () => {
     const trimmed = draft.trim()
@@ -103,15 +126,7 @@ export function CommentCard({
       data-comment-id={comment.id}
     >
       <div className="comments__card-head">
-        <button
-          type="button"
-          className="comments__chevron"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-expanded={!collapsed}
-          title={collapsed ? 'Expand' : 'Collapse'}
-        >
-          {collapsed ? '▸' : '▾'}
-        </button>
+        <CommentAvatar name={author} />
         <span className="comments__author">{author}</span>
         {broken && (
           <span
@@ -129,7 +144,6 @@ export function CommentCard({
               onClick={() => {
                 setDraft(comment.text)
                 setEditing(true)
-                setCollapsed(false)
               }}
             >
               Edit
@@ -145,48 +159,44 @@ export function CommentCard({
         )}
       </div>
 
-      {!collapsed && (
+      <button
+        type="button"
+        className="comments__quote comments__quote--link"
+        onClick={() => onFocus(comment)}
+        title="Show in preview"
+      >
+        “{comment.quote}”
+      </button>
+      {editing ? (
         <>
-          <button
-            type="button"
-            className="comments__quote comments__quote--link"
-            onClick={() => onFocus(comment)}
-            title="Show in preview"
-          >
-            “{comment.quote}”
-          </button>
-          {editing ? (
-            <>
-              <textarea
-                className="comments__input"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') setEditing(false)
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit()
-                }}
-              />
-              <div className="comments__actions">
-                <button
-                  type="button"
-                  className="comments__btn"
-                  onClick={() => setEditing(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="comments__btn comments__btn--primary"
-                  onClick={saveEdit}
-                >
-                  Save
-                </button>
-              </div>
-            </>
-          ) : (
-            <p className="comments__text">{comment.text}</p>
-          )}
+          <textarea
+            className="comments__input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setEditing(false)
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit()
+            }}
+          />
+          <div className="comments__actions">
+            <button
+              type="button"
+              className="comments__btn"
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="comments__btn comments__btn--primary"
+              onClick={saveEdit}
+            >
+              Save
+            </button>
+          </div>
         </>
+      ) : (
+        <p className="comments__text">{comment.text}</p>
       )}
     </div>
   )

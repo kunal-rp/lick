@@ -9,7 +9,7 @@ import {
 import type { CSSProperties } from 'react'
 import { parse, renderEmphasis, type Section } from '../fountain'
 import { LINES_PER_PAGE } from '../pagination'
-import { CommentCard, CommentCompose } from './CommentsRail'
+import { CommentAvatar, CommentCard, CommentCompose } from './CommentsRail'
 import type { Comment, CommentAnchor } from '../comments'
 import { useIsMobile } from '../useIsMobile'
 import './Preview.css'
@@ -199,14 +199,19 @@ export function Preview({
   // they're desktop-only.
   const showMarginComments = commentingEnabled && !isMobile
 
-  // Layout of the comment gutter, measured in scroll-content coordinates: the
-  // gutter's left edge, the resolved (collision-avoiding) top of each card, and
-  // the compose box's top. The overlay lives outside the pages' zoom transform.
+  // Comment markers, in scroll-content coordinates (the overlay lives outside
+  // the pages' zoom transform). One marker per line that has comments, placed in
+  // the page's right margin at that line and pushed down just enough to never
+  // overlap the marker above. Each expands into a popover card on click.
   const commentsRef = useRef<HTMLDivElement>(null)
-  const [commentColLeft, setCommentColLeft] = useState(0)
-  const [commentTops, setCommentTops] = useState<Map<string, number>>(new Map())
-  const [composeTop, setComposeTop] = useState<number | null>(null)
-  const [commentsHeight, setCommentsHeight] = useState(0)
+  const [commentMarkers, setCommentMarkers] = useState<
+    { key: string; top: number; left: number; comments: Comment[] }[]
+  >([])
+  const [composePos, setComposePos] = useState<{ top: number; left: number } | null>(
+    null,
+  )
+  // The line-key of the marker whose popover is open, or null when collapsed.
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
   // The comment currently flashed (briefly highlighted), cleared on a timer.
   const [flashId, setFlashId] = useState<string | null>(null)
 
@@ -408,80 +413,100 @@ export function Preview({
     setStickyLayerHeight(scroll.scrollHeight)
   }, [sectionBands, zoom, sectionById, showSections])
 
-  // Place the comment cards in the right-hand gutter. Each card is anchored to
-  // the vertical position of the text it refers to (measured in scroll-content
-  // coordinates, like the sticky labels); a top-down pass then pushes any
-  // overlapping card down so cards never cover one another. The gutter's left
-  // edge sits just past the page's right edge.
-  const settleComments = useCallback(() => {
+  // Place a comment marker in the page's right margin at each commented line.
+  // Markers are measured in scroll-content coordinates (like the sticky section
+  // labels); comments sharing a line collapse into one marker, and a top-down
+  // pass pushes any marker down just enough to clear the one above it.
+  const MARKER_SIZE = 22
+  const MARKER_GAP = 6
+  const placeComments = useCallback(() => {
     const scroll = scrollRef.current
     const pagesEl = pagesRef.current
-    if (scroll === null || pagesEl === null || !showMarginComments) return
+    if (scroll === null || pagesEl === null || !showMarginComments) {
+      setCommentMarkers([])
+      setComposePos(null)
+      return
+    }
     const scrollRect = scroll.getBoundingClientRect()
-
     const firstPage = pagesEl.querySelector('.preview__page')
-    const colLeft =
-      firstPage instanceof HTMLElement
-        ? firstPage.getBoundingClientRect().right -
-          scrollRect.left +
-          scroll.scrollLeft +
-          20
-        : 0
+    if (!(firstPage instanceof HTMLElement)) return
+    const pageRect = firstPage.getBoundingClientRect()
+    const pageLeft = pageRect.left - scrollRect.left + scroll.scrollLeft
+    // The right margin starts at 7.5/8.5 of the page width (1.5in left margin +
+    // 6in text column). Sit the marker just inside it.
+    const markerLeft = pageLeft + pageRect.width * (7.5 / 8.5) + 6
 
     const anchorTop = (line: number): number | null => {
       const el = pagesEl.querySelector(`.el[data-line="${line}"]`)
       if (!(el instanceof HTMLElement)) return null
       return el.getBoundingClientRect().top - scrollRect.top + scroll.scrollTop
     }
-    const heightOf = (id: string): number => {
-      const card = commentsRef.current?.querySelector(`[data-slot="${id}"]`)
-      return card instanceof HTMLElement ? card.offsetHeight : 96
-    }
 
-    const items = comments
-      .map((c) => ({ id: c.id, anchor: anchorTop(c.startLine) ?? 0 }))
+    // One marker per commented line; comments on the same line ride together.
+    const groups = new Map<number, Comment[]>()
+    for (const c of comments) {
+      const arr = groups.get(c.startLine)
+      if (arr === undefined) groups.set(c.startLine, [c])
+      else arr.push(c)
+    }
+    const placed = [...groups.entries()]
+      .map(([line, cs]) => ({ line, cs, anchor: anchorTop(line) ?? 0 }))
       .sort((a, b) => a.anchor - b.anchor)
-    const tops = new Map<string, number>()
-    let prevBottom = -Infinity
-    for (const it of items) {
-      const top = Math.max(it.anchor, prevBottom + 10)
-      tops.set(it.id, top)
-      prevBottom = top + heightOf(it.id)
-    }
 
-    setCommentColLeft(colLeft)
-    setCommentTops(tops)
-    setComposeTop(
-      composeAnchor !== null ? (anchorTop(composeAnchor.startLine) ?? 0) : null,
+    const markers: { key: string; top: number; left: number; comments: Comment[] }[] =
+      []
+    let prevBottom = -Infinity
+    for (const g of placed) {
+      const top = Math.max(g.anchor, prevBottom + MARKER_GAP)
+      markers.push({ key: String(g.line), top, left: markerLeft, comments: g.cs })
+      prevBottom = top + MARKER_SIZE
+    }
+    setCommentMarkers(markers)
+    setComposePos(
+      composeAnchor !== null
+        ? { top: anchorTop(composeAnchor.startLine) ?? 0, left: markerLeft }
+        : null,
     )
-    setCommentsHeight(items.length > 0 ? prevBottom + 24 : 0)
   }, [comments, composeAnchor, showMarginComments])
 
-  // Coalesce re-flows (card expand/collapse, pane resize) into one per frame.
-  const settleRaf = useRef(0)
-  const scheduleSettle = useCallback(() => {
-    if (settleRaf.current !== 0) return
-    settleRaf.current = requestAnimationFrame(() => {
-      settleRaf.current = 0
-      settleComments()
+  // Coalesce re-placements (pane resize, layout change) into one per frame.
+  const placeRaf = useRef(0)
+  const schedulePlace = useCallback(() => {
+    if (placeRaf.current !== 0) return
+    placeRaf.current = requestAnimationFrame(() => {
+      placeRaf.current = 0
+      placeComments()
     })
-  }, [settleComments])
+  }, [placeComments])
 
-  // Re-place cards when the comments, the composed anchor, or the page layout
+  // Re-place markers when the comments, the composed anchor, or the page layout
   // (pagination / zoom) change.
   useLayoutEffect(() => {
-    settleComments()
-  }, [settleComments, pages, zoom])
+    placeComments()
+  }, [placeComments, pages, zoom])
 
-  // Pane resize shifts the centered page (so the gutter moves) without changing
+  // Pane resize shifts the centered page (so the margin moves) without changing
   // pagination — re-place on scroll-element resize.
   useEffect(() => {
     const scroll = scrollRef.current
     if (scroll === null || !showMarginComments) return
-    const observer = new ResizeObserver(scheduleSettle)
+    const observer = new ResizeObserver(schedulePlace)
     observer.observe(scroll)
     return () => observer.disconnect()
-  }, [scheduleSettle, showMarginComments])
+  }, [schedulePlace, showMarginComments])
+
+  // Collapse an open popover when clicking anywhere outside it or its marker.
+  useEffect(() => {
+    if (expandedKey === null) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      const overlay = commentsRef.current
+      if (overlay !== null && overlay.contains(t)) return
+      setExpandedKey(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [expandedKey])
 
   // Flash a comment card briefly when its text is selected in the page.
   useEffect(() => {
@@ -695,6 +720,7 @@ export function Preview({
     setPending(null)
     setComposeAnchor(null)
     setCommentFocus(null)
+    setExpandedKey(null)
   }, [versionId])
 
   // Editor double-click → scroll the preview to the element containing that
@@ -820,6 +846,8 @@ export function Preview({
       )
     })
     if (hit !== undefined) {
+      // Open the marker for that line so the flashed card is actually visible.
+      setExpandedKey(String(hit.startLine))
       setCommentFocus((f) => ({ id: hit.id, nonce: (f?.nonce ?? 0) + 1 }))
     }
 
@@ -937,9 +965,7 @@ export function Preview({
       </div>
       <div className="preview__body">
         <div
-          className={`preview__scroll${
-            showMarginComments ? ' preview__scroll--commenting' : ''
-          }`}
+          className="preview__scroll"
           ref={scrollRef}
         >
           {/* Off-screen single-column layout, used only to measure heights.
@@ -1061,50 +1087,82 @@ export function Preview({
             </button>
           )}
 
-          {/* Comment gutter: cards anchored beside the text they annotate. The
-              overlay is a direct child of the scroll element (outside the pages'
-              zoom transform); the settle effect places each card. */}
+          {/* Comment markers in the page's right margin. The overlay is a direct
+              child of the scroll element (outside the pages' zoom transform);
+              each marker expands into a popover card that floats over the page. */}
           {showMarginComments &&
             (comments.length > 0 || composeAnchor !== null) && (
-              <div
-                className="preview__comments"
-                ref={commentsRef}
-                style={{ height: commentsHeight || undefined }}
-              >
-                {composeAnchor !== null && composeTop !== null && (
+              <div className="preview__comments" ref={commentsRef}>
+                {commentMarkers.map((m) => {
+                  const open = expandedKey === m.key
+                  const allBroken = m.comments.every((c) => brokenIds.has(c.id))
+                  return (
+                    <div
+                      key={m.key}
+                      className="preview__comment-anchor"
+                      style={{ top: m.top, left: m.left }}
+                    >
+                      <button
+                        type="button"
+                        className={`preview__comment-marker${
+                          open ? ' preview__comment-marker--open' : ''
+                        }${allBroken ? ' preview__comment-marker--broken' : ''}`}
+                        title={
+                          m.comments.length > 1
+                            ? `${m.comments.length} comments`
+                            : `Comment by ${m.comments[0].author ?? authorName}`
+                        }
+                        onClick={() =>
+                          setExpandedKey((k) => (k === m.key ? null : m.key))
+                        }
+                      >
+                        <CommentAvatar
+                          name={m.comments[0].author ?? authorName}
+                        />
+                        {m.comments.length > 1 && (
+                          <span className="preview__comment-count">
+                            {m.comments.length}
+                          </span>
+                        )}
+                      </button>
+                      {open && (
+                        <div className="preview__comment-pop">
+                          {m.comments.map((c) => (
+                            <CommentCard
+                              key={c.id}
+                              comment={c}
+                              broken={brokenIds.has(c.id)}
+                              authorName={authorName}
+                              flash={flashId === c.id}
+                              onEdit={(id, text) => onEditComment?.(id, text)}
+                              onDelete={(id) => onDeleteComment?.(id)}
+                              onFocus={focusComment}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {composeAnchor !== null && composePos !== null && (
                   <div
-                    className="preview__comment-slot"
-                    style={{ top: composeTop, left: commentColLeft }}
+                    className="preview__comment-anchor"
+                    style={{ top: composePos.top, left: composePos.left }}
                   >
-                    <CommentCompose
-                      anchor={composeAnchor}
-                      onCreate={(text) => {
-                        if (composeAnchor !== null) onAddComment?.(composeAnchor, text)
-                        setComposeAnchor(null)
-                      }}
-                      onCancel={() => setComposeAnchor(null)}
-                    />
+                    <div className="preview__comment-pop">
+                      <CommentCompose
+                        anchor={composeAnchor}
+                        onCreate={(text) => {
+                          if (composeAnchor !== null)
+                            onAddComment?.(composeAnchor, text)
+                          setComposeAnchor(null)
+                        }}
+                        onCancel={() => setComposeAnchor(null)}
+                      />
+                    </div>
                   </div>
                 )}
-                {comments.map((c) => (
-                  <div
-                    key={c.id}
-                    className="preview__comment-slot"
-                    data-slot={c.id}
-                    style={{ top: commentTops.get(c.id) ?? 0, left: commentColLeft }}
-                  >
-                    <CommentCard
-                      comment={c}
-                      broken={brokenIds.has(c.id)}
-                      authorName={authorName}
-                      flash={flashId === c.id}
-                      onEdit={(id, text) => onEditComment?.(id, text)}
-                      onDelete={(id) => onDeleteComment?.(id)}
-                      onFocus={focusComment}
-                      onLayoutChange={scheduleSettle}
-                    />
-                  </div>
-                ))}
               </div>
             )}
         </div>

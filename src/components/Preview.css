@@ -234,28 +234,76 @@
   touch-action: pan-x pan-y;
 }
 
-/* Reserve a right-hand gutter for the comment cards; the page centres in the
-   space that's left, so the cards sit beside it (Fit accounts for this width). */
-.preview__scroll--commenting {
-  padding-right: 300px;
-}
-
-/* Comment gutter overlay: a child of the scroll element (so it scrolls with the
-   pages and its coordinates match scroll content), outside the zoom transform.
-   Cards are positioned absolutely by the settle effect. */
+/* Comment overlay: a child of the scroll element (so it scrolls with the pages
+   and its coordinates match scroll content), outside the zoom transform. Markers
+   are positioned absolutely in the page's right margin by the placement effect. */
 .preview__comments {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
+  height: 100%;
   z-index: 3;
   pointer-events: none;
 }
 
-.preview__comment-slot {
+/* A marker's anchor point, at the commented line in the right margin. */
+.preview__comment-anchor {
   position: absolute;
-  width: 250px;
   pointer-events: auto;
+}
+
+/* Collapsed marker: a mini card (same palette as the expanded card) carrying
+   the author avatar and, when a line has several comments, their count. */
+.preview__comment-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid #383838;
+  border-radius: 6px 6px 6px 2px;
+  background: #262626;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.preview__comment-marker:hover {
+  border-color: #4a4a4a;
+  background: #2e2e2e;
+}
+
+.preview__comment-marker--open {
+  border-color: #c47a4a;
+  outline: 1px solid #c47a4a;
+}
+
+.preview__comment-marker--broken {
+  border-color: #7a5a2a;
+}
+
+.preview__comment-count {
+  padding-right: 2px;
+  color: #ddd;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Popover: floats to the left of the marker, over the page, at a readable
+   width. Holds one card, or every comment that shares the marker's line. */
+.preview__comment-pop {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 260px;
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 6;
 }
 
 /* Floating "add comment" button in the right margin of the page area. */
