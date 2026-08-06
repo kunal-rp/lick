@@ -974,10 +974,7 @@ export function Preview({
                     }
                   >
                     <span className="preview__section-label-name">{l.label}</span>
-                    {/* Only show the description when the margin is wide enough
-                        for it to be legible; at fit-width it would truncate to a
-                        stray letter, so the title stands alone. */}
-                    {l.description !== '' && l.maxWidth >= 200 && (
+                    {l.description !== '' && (
                       <span className="preview__section-label-desc">
                         {l.description}
                       </span>

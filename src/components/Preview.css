@@ -133,30 +133,30 @@
   position: sticky;
   top: 12px;
   display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 2px 11px;
-  border-radius: 999px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 4px 10px;
+  border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--section-color) 55%, transparent);
   background: color-mix(in srgb, var(--section-color) 22%, #fff);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  white-space: nowrap;
-  overflow: hidden;
+  /* Wrap the title/description within the margin width instead of clipping, so
+     both stay fully readable without ever reaching the script text column. */
+  overflow-wrap: anywhere;
 }
 
 .preview__section-label-name {
-  flex: 0 0 auto;
   color: #1a1a1a;
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.3;
 }
 
 .preview__section-label-desc {
-  overflow: hidden;
   color: #555;
-  font-size: 12px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 /* Mobile: no zoom controls — the pages fit the narrow pane on their own. */
