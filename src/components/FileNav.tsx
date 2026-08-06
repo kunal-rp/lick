@@ -69,7 +69,7 @@ export function FileNav({
       <div className="filenav__backdrop" onClick={onToggle} aria-hidden="true" />
       <aside className="filenav">
       <div className="filenav__header">
-        <span className="filenav__brand">lick screenwriting</span>
+        <span className="filenav__brand">kunal's scripts</span>
         <button
           type="button"
           className="filenav__icon-btn"

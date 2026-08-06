@@ -231,6 +231,13 @@ export default function App() {
     saveTheme(theme)
   }, [theme])
 
+  // Name the browser tab after the script being edited, so multiple open tabs
+  // are tellable apart; fall back to the app name when nothing is open.
+  const scriptName = selectedScript?.name ?? null
+  useEffect(() => {
+    document.title = scriptName ? `${scriptName} — kunal's scripts` : "kunal's scripts"
+  }, [scriptName])
+
   // Persist which panels are open as they change.
   useEffect(() => {
     layoutRef.current.showPreview = showPreview
@@ -813,7 +820,7 @@ function SignIn({ onSignIn }: { onSignIn: () => void }) {
   return (
     <div className="signin">
       <div className="signin__card">
-        <h1 className="signin__title">Fountain Editor</h1>
+        <h1 className="signin__title">kunal's scripts</h1>
         <p className="signin__blurb">
           This editor stores your screenplays in Google Drive. Sign in to grant
           Drive access.
