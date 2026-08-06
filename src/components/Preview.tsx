@@ -347,6 +347,9 @@ export function Preview({
 
   // Preview magnification, as a percentage (100 = actual size).
   const [zoom, setZoom] = useState(100)
+  // Auto-fit (desktop): when on, keep the page fitted to the pane and re-fit on
+  // every pane resize. Any manual zoom turns it off.
+  const [autoFit, setAutoFit] = useState(false)
   // Mirror of `zoom` for use inside native event listeners without re-binding.
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
@@ -355,10 +358,8 @@ export function Preview({
   // scroll container from inside the zoom-transformed pages, so the labels live
   // in an overlay that is a direct child of the scroll element; here we measure
   // each section's on-screen band extent (union across its pages) and express it
-  // in scroll-content coordinates for that overlay. Re-runs when the bands or
-  // the zoom change; the coordinates are scroll-invariant, so no scroll listener
-  // is needed (the browser handles the pinning via `position: sticky`).
-  useLayoutEffect(() => {
+  // in scroll-content coordinates for that overlay.
+  const placeLabels = useCallback(() => {
     const scroll = scrollRef.current
     const container = pagesRef.current
     if (scroll === null || container === null) return
@@ -411,7 +412,24 @@ export function Preview({
     }
     setStickyLabels(labels)
     setStickyLayerHeight(scroll.scrollHeight)
-  }, [sectionBands, zoom, sectionById, showSections])
+  }, [zoom, sectionById, showSections])
+
+  // Re-place labels after each band re-measure (pagination / zoom / edits).
+  useLayoutEffect(() => {
+    placeLabels()
+  }, [placeLabels, sectionBands])
+
+  // …and whenever the pane resizes. Labels are keyed to the page's on-screen
+  // left edge, which shifts when the pane width changes (e.g. dragging the split
+  // divider) with no change to zoom or pagination — so without this the labels
+  // would drift off the page into the gutter.
+  useEffect(() => {
+    const scroll = scrollRef.current
+    if (scroll === null || !showSections) return
+    const ro = new ResizeObserver(() => placeLabels())
+    ro.observe(scroll)
+    return () => ro.disconnect()
+  }, [placeLabels, showSections])
 
   // Place a comment marker in the page's right margin at each commented line.
   // Markers are measured in scroll-content coordinates (like the sticky section
@@ -530,6 +548,7 @@ export function Preview({
       if (!e.ctrlKey) return
       e.preventDefault()
       userZoomedRef.current = true
+      setAutoFit(false)
       setZoom((z) => clampZoom(z * Math.exp(-e.deltaY * 0.005)))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
@@ -556,6 +575,7 @@ export function Preview({
       if (e.touches.length !== 2 || startSpread === 0) return
       e.preventDefault() // suppress native pinch / scroll during the gesture
       userZoomedRef.current = true
+      setAutoFit(false)
       setZoom(clampZoom((startZoom * spread(e.touches)) / startSpread))
     }
     const onEnd = (e: TouchEvent) => {
@@ -577,19 +597,32 @@ export function Preview({
   // rightmost text sits at 1.5in (left margin) + 6in (text area) = 7.5in from
   // the page's left edge, so fit that extent to the available width — the blank
   // right margin may crop, maximizing legible text size.
-  const fitZoom = () => {
+  const fitZoom = useCallback(() => {
     const scroll = scrollRef.current
     if (scroll === null) return
     const style = getComputedStyle(scroll)
     const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
-    // With comments in the gutter, fit the whole sheet so its right edge (where
-    // the cards attach) stays visible; otherwise fit just the text extent
-    // (through 7.5in), cropping the blank right margin to maximize legible size.
+    // With comments in the margin, fit the whole sheet so the right-margin
+    // markers stay visible; otherwise fit just the text extent (through 7.5in),
+    // cropping the blank right margin to maximize legible size.
     const extentPx = (showMarginComments ? 8.5 : 7.5) * 96
     const available = scroll.clientWidth - padX
     userZoomedRef.current = false // an explicit Fit re-enables mobile auto-fit
     setZoom(clampZoom(Math.floor((available / extentPx) * 100)))
-  }
+  }, [showMarginComments])
+
+  // Desktop auto-fit: while enabled, fit now and on every pane resize (dragging
+  // the split divider, window resize). A manual zoom clears `autoFit`, which
+  // tears this down.
+  useEffect(() => {
+    if (!autoFit || isMobile) return
+    const scroll = scrollRef.current
+    if (scroll === null) return
+    fitZoom()
+    const ro = new ResizeObserver(() => fitZoom())
+    ro.observe(scroll)
+    return () => ro.disconnect()
+  }, [autoFit, isMobile, fitZoom])
 
   // Mobile has no zoom controls, so fit the full page width to the pane
   // automatically — recomputing whenever the pane resizes (rotation, keyboard).
@@ -936,16 +969,26 @@ export function Preview({
             max={ZOOM_MAX}
             step={5}
             value={zoom}
-            onChange={(e) => setZoom(Number(e.target.value))}
+            onChange={(e) => {
+              setAutoFit(false)
+              setZoom(Number(e.target.value))
+            }}
             aria-label="Preview magnification"
           />
           <span className="preview__zoom-value">{Math.round(zoom)}%</span>
         </label>
         <button
           type="button"
-          className="preview__zoom-fit"
-          onClick={fitZoom}
-          title="Fit the page width to the pane"
+          className={`preview__zoom-fit${
+            autoFit ? ' preview__zoom-fit--active' : ''
+          }`}
+          onClick={() => setAutoFit((v) => !v)}
+          aria-pressed={autoFit}
+          title={
+            autoFit
+              ? 'Auto-fit on: the preview refits as the pane resizes'
+              : 'Fit the page to the pane and keep it fitted on resize'
+          }
         >
           Fit
         </button>

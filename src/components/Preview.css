@@ -66,6 +66,13 @@
   color: #fff;
 }
 
+.preview__zoom-fit--active,
+.preview__zoom-fit--active:hover {
+  background: #a0643a;
+  border-color: #a0643a;
+  color: #fff;
+}
+
 .preview__sections-toggle {
   padding: 3px 10px;
   border: 1px solid #444;
