@@ -1,5 +1,6 @@
 import type { DriveFile } from './files'
 import { COMMENTS_FILENAME } from '../comments'
+import { HISTORY_FILENAME } from '../history'
 
 // Versions are files named `<script name>_v<N>.fountain` inside a script
 // folder. The number orders them; the highest is the most recent. Files that
@@ -34,9 +35,14 @@ export function isCommentsFile(file: DriveFile): boolean {
   return file.name === COMMENTS_FILENAME
 }
 
-/** Files that are neither PDF exports nor the comments store. */
+/** Whether a file is the script's edit-history store (data, not a version). */
+export function isHistoryFile(file: DriveFile): boolean {
+  return file.name === HISTORY_FILENAME
+}
+
+/** Files that are neither PDF exports nor a data sidecar. */
 function isVersionFile(file: DriveFile): boolean {
-  return !isPdf(file) && !isCommentsFile(file)
+  return !isPdf(file) && !isCommentsFile(file) && !isHistoryFile(file)
 }
 
 /** Parse and order the editable version files, most recent first. */

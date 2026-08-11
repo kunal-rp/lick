@@ -5,6 +5,7 @@ import { InsightsPanel } from './components/InsightsPanel'
 import { SplitPane } from './components/SplitPane'
 import { FileNav } from './components/FileNav'
 import { VersionBar } from './components/VersionBar'
+import { HistoryPanel } from './components/HistoryPanel'
 import {
   createBinaryFile,
   createFile,
@@ -19,11 +20,22 @@ import {
 } from './drive/files'
 import {
   isCommentsFile,
+  isHistoryFile,
   isPdf,
   nextVersionNumber,
   parseVersions,
   versionFileName,
 } from './drive/versions'
+import {
+  HISTORY_FILENAME,
+  appendSnapshot,
+  makeSnapshot,
+  parseHistory,
+  serializeHistory,
+  snapshotsForVersion,
+  type HistorySnapshot,
+  type SnapshotKind,
+} from './history'
 import { parseSections } from './fountain'
 import { buildScreenplayPdf } from './pdf'
 import {
@@ -47,6 +59,11 @@ import './App.css'
 const AUTOSAVE_IDLE_MS = 1500
 const AUTOSAVE_MAX_MS = 8000
 const AUTOSAVE_CHANGE_THRESHOLD = 40
+
+// Edit-history snapshots pile up in memory as the user edits; the JSON file is
+// written to Drive this long after the last change, so history writes lag —
+// never race — the version saves.
+const HISTORY_WRITE_DEBOUNCE_MS = 5000
 
 // Load the whole directory: every script folder plus its version files, so the
 // left-nav tree can show the full project at once.
@@ -112,9 +129,29 @@ export default function App() {
   const revealInPreview = (line: number) =>
     setReveal((r) => ({ line, nonce: (r?.nonce ?? 0) + 1 }))
 
+  // Bumped to force the (otherwise uncontrolled) editor to remount and re-seed
+  // its text — used when restoring a history snapshot into the open version.
+  const [editorReloadNonce, setEditorReloadNonce] = useState(0)
+
   // Comments for the selected script (all versions), from its comments.json.
   const [comments, setComments] = useState<Comment[]>([])
   const commentsFileIdRef = useRef<string | null>(null)
+
+  // Recent edit-history snapshots for the selected script (all versions), from
+  // its history.json. Captured as the user edits; browsable in the History
+  // drawer, where any snapshot can be restored.
+  const [history, setHistory] = useState<HistorySnapshot[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+  // Live mirror of `history` for the async snapshot recorder/writer, plus the
+  // script it belongs to and the Drive file id (created lazily on first write).
+  const historyRef = useRef<HistorySnapshot[]>([])
+  const historyScriptIdRef = useRef<string | null>(null)
+  const historyFileIdRef = useRef<string | null>(null)
+  // Which script's history is loaded, so a versionsByScript refresh (e.g. after
+  // creating history.json) doesn't clobber freshly recorded in-memory snapshots.
+  const loadedHistoryScriptRef = useRef<string | null>(null)
+  const historyDirtyRef = useRef(false)
+  const historyWriteTimer = useRef<number>(0)
   // True while a create/rename/new-version Drive write is in flight.
   const [busy, setBusy] = useState(false)
   // Last Drive-operation error message, shown to the user.
@@ -367,6 +404,121 @@ export default function App() {
     }
   }, [selectedScriptId, versionsByScript])
 
+  // Load the selected script's edit history (a single history.json for all its
+  // versions). Only re-reads when the script actually changes — a
+  // versionsByScript refresh (e.g. right after we create history.json) must not
+  // overwrite snapshots recorded in memory since the load.
+  useEffect(() => {
+    if (selectedScriptId === null) {
+      setHistory([])
+      historyRef.current = []
+      historyScriptIdRef.current = null
+      historyFileIdRef.current = null
+      loadedHistoryScriptRef.current = null
+      return
+    }
+    if (loadedHistoryScriptRef.current === selectedScriptId) return
+    const file = (versionsByScript[selectedScriptId] ?? []).find(isHistoryFile)
+    historyScriptIdRef.current = selectedScriptId
+    historyFileIdRef.current = file?.id ?? null
+    if (file === undefined) {
+      setHistory([])
+      historyRef.current = []
+      loadedHistoryScriptRef.current = selectedScriptId
+      return
+    }
+    let active = true
+    readFile(file)
+      .then((text) => {
+        if (!active) return
+        const snaps = parseHistory(text)
+        setHistory(snaps)
+        historyRef.current = snaps
+        loadedHistoryScriptRef.current = selectedScriptId
+      })
+      .catch((err) => {
+        console.error('[history] read failed:', err)
+        if (!active) return
+        setHistory([])
+        historyRef.current = []
+        loadedHistoryScriptRef.current = selectedScriptId
+      })
+    return () => {
+      active = false
+    }
+  }, [selectedScriptId, versionsByScript])
+
+  // Write the accumulated snapshots to the script's history.json (creating it
+  // the first time). Debounced and guarded so it only writes the script it was
+  // scheduled for, and never blocks editing.
+  async function flushHistory(scriptId: string) {
+    historyWriteTimer.current = 0
+    if (!historyDirtyRef.current) return
+    if (historyScriptIdRef.current !== scriptId) return
+    historyDirtyRef.current = false
+    const json = serializeHistory(historyRef.current)
+    try {
+      const fileId = historyFileIdRef.current
+      if (fileId !== null) {
+        await updateFileContent(fileId, json)
+      } else {
+        const created = await createFile(scriptId, HISTORY_FILENAME, json)
+        historyFileIdRef.current = created.id
+        const refreshed = await listFiles(scriptId)
+        setVersionsByScript((prev) => ({ ...prev, [scriptId]: refreshed }))
+      }
+    } catch (err) {
+      console.error('[history] write failed:', err)
+      historyDirtyRef.current = true // retry on the next scheduled flush
+    }
+  }
+
+  // Record a snapshot of a version's text into the in-memory history and
+  // schedule a debounced write. No-ops (dedup/coalesce) don't schedule a write.
+  function recordSnapshot(versionId: string, text: string, kind: SnapshotKind) {
+    const scriptId = historyScriptIdRef.current
+    if (scriptId === null) return
+    const next = appendSnapshot(
+      historyRef.current,
+      makeSnapshot(versionId, text, kind, Date.now()),
+    )
+    if (next === historyRef.current) return // nothing changed
+    historyRef.current = next
+    setHistory(next)
+    historyDirtyRef.current = true
+    if (historyWriteTimer.current !== 0) {
+      clearTimeout(historyWriteTimer.current)
+    }
+    historyWriteTimer.current = window.setTimeout(
+      () => void flushHistory(scriptId),
+      HISTORY_WRITE_DEBOUNCE_MS,
+    )
+  }
+
+  // Restore a snapshot's text into the open version. Non-destructive: the text
+  // that was current is snapshotted first (so it stays reachable — "forward"),
+  // then the chosen text is loaded, the editor remounted to show it, and it's
+  // written to the version file on Drive.
+  function restoreSnapshot(snap: HistorySnapshot) {
+    if (selectedVersionId === null || snap.versionId !== selectedVersionId) return
+    const versionId = selectedVersionId
+    if (snap.text === sourceRef.current) return // already showing this text
+    recordSnapshot(versionId, sourceRef.current, 'auto') // preserve current
+    setContent(snap.text)
+    contentRef.current = snap.text
+    setSource(snap.text)
+    sourceRef.current = snap.text
+    setEditorReloadNonce((n) => n + 1)
+    recordSnapshot(versionId, snap.text, 'restore')
+    void run('Restore', async () => {
+      await updateFileContent(versionId, snap.text)
+      changeCountRef.current = 0
+      lastSavedAtRef.current = Date.now()
+      setSavedAt(Date.now())
+      setSaveState('saved')
+    })
+  }
+
   // Write the comments array to the script's comments.json (creating it the
   // first time), then apply it to state.
   async function persistComments(scriptId: string, next: Comment[]) {
@@ -453,6 +605,8 @@ export default function App() {
         lastSavedAtRef.current = Date.now()
         setSavedAt(Date.now())
         setSaveState('saved')
+        // Capture this saved text in the edit history (coalesced + capped).
+        recordSnapshot(versionId, text, 'auto')
       }
     } catch (err) {
       console.error('[drive] auto-save failed:', err)
@@ -487,6 +641,15 @@ export default function App() {
       void persist() // flush any unsaved edits to the outgoing version first
       setContent(null)
       contentRef.current = null
+    }
+    // Leaving a script: write out any pending history for it now, before the
+    // load effect repoints history state at the incoming script.
+    if (scriptId !== selectedScriptId && historyScriptIdRef.current !== null) {
+      if (historyWriteTimer.current !== 0) {
+        clearTimeout(historyWriteTimer.current)
+        historyWriteTimer.current = 0
+      }
+      void flushHistory(historyScriptIdRef.current)
     }
     setSelectedScriptId(scriptId)
     setSelectedVersionId(versionId)
@@ -715,7 +878,7 @@ export default function App() {
               {(() => {
                 const editorNode = (
                   <Editor
-                    key={selectedVersionId}
+                    key={`${selectedVersionId}:${editorReloadNonce}`}
                     initialValue={content}
                     onChange={handleSourceChange}
                     pageBreakLines={pageBreakLines}
@@ -741,6 +904,14 @@ export default function App() {
                         title: 'Show or hide the preview',
                         active: showPreview,
                         onToggle: () => setShowPreview((v) => !v),
+                      },
+                      {
+                        key: 'history',
+                        glyph: '🕘',
+                        label: 'History',
+                        title: 'View and restore recent edits',
+                        active: showHistory,
+                        onToggle: () => setShowHistory((v) => !v),
                       },
                     ]}
                   />
@@ -808,6 +979,15 @@ export default function App() {
                   />
                 )
               })()}
+              {showHistory && (
+                <HistoryPanel
+                  snapshots={snapshotsForVersion(history, selectedVersionId)}
+                  currentText={source}
+                  onRestore={restoreSnapshot}
+                  onClose={() => setShowHistory(false)}
+                  busy={busy}
+                />
+              )}
             </div>
           </>
         )}
