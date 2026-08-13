@@ -58,6 +58,45 @@ export function diffLines(from: string, to: string): DiffLine[] {
   return out
 }
 
+/** A collapsed run of unchanged lines, standing in for `count` context lines. */
+export interface DiffGap {
+  op: 'gap'
+  count: number
+}
+
+export type DiffRow = DiffLine | DiffGap
+
+/**
+ * Drop unchanged lines that are far from any change, keeping `context` lines on
+ * each side of every add/del. Collapsed runs become a single gap row, so the
+ * output shows just the changes (plus a little orientation) instead of the
+ * whole document. Short runs (≤ context*2) are left inline rather than gapped.
+ */
+export function collapseUnchanged(lines: DiffLine[], context = 2): DiffRow[] {
+  const keep = new Array<boolean>(lines.length).fill(false)
+  lines.forEach((line, i) => {
+    if (line.op === 'ctx') return
+    const lo = Math.max(0, i - context)
+    const hi = Math.min(lines.length - 1, i + context)
+    for (let j = lo; j <= hi; j++) keep[j] = true
+  })
+
+  const rows: DiffRow[] = []
+  let i = 0
+  while (i < lines.length) {
+    if (keep[i]) {
+      rows.push(lines[i])
+      i++
+      continue
+    }
+    let j = i
+    while (j < lines.length && !keep[j]) j++
+    rows.push({ op: 'gap', count: j - i })
+    i = j
+  }
+  return rows
+}
+
 /** Count of added/removed lines between `from` and `to`. */
 export function diffSummary(from: string, to: string): DiffSummary {
   if (from === to) return { added: 0, removed: 0 }
