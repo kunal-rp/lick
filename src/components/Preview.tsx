@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react'
 import type { CSSProperties } from 'react'
-import { parse, renderEmphasis, type Section } from '../fountain'
+import { parse, renderEmphasis, CONTD_SUFFIX, type Section } from '../fountain'
 import { LINES_PER_PAGE } from '../pagination'
 import { CommentAvatar, CommentCard, CommentCompose } from './CommentsRail'
 import type { Comment, CommentAnchor } from '../comments'
@@ -811,6 +811,7 @@ export function Preview({
         className={`el el--${el.type}`}
       >
         {renderEmphasis(el.text)}
+        {el.type === 'character' && el.cont === true ? CONTD_SUFFIX : null}
       </p>
     )
   }

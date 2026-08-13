@@ -1,5 +1,5 @@
 import type { PDFFont, PDFPage } from 'pdf-lib'
-import { parse } from './fountain'
+import { parse, CONTD_SUFFIX } from './fountain'
 import type { ScreenplayElement } from './fountain'
 import { LINES_PER_PAGE } from './pagination'
 
@@ -220,7 +220,9 @@ export async function buildScreenplayPdf(source: string): Promise<Uint8Array> {
       continue
     }
     const layout = layoutFor(el.type)
-    const lines = wrap(clean(el.text), layout.width)
+    const text =
+      el.type === 'character' && el.cont === true ? el.text + CONTD_SUFFIX : el.text
+    const lines = wrap(clean(text), layout.width)
     emit(lines, layout, BLOCK_STARTERS.has(el.type))
   }
 

@@ -83,6 +83,45 @@ function looksLikeCharacter(line: string): boolean {
   return core.length > 0 && /[A-Za-z]/.test(core) && core === core.toUpperCase()
 }
 
+/** The suffix appended to a continuing character cue (screenwriting standard). */
+export const CONTD_SUFFIX = " (CONT'D)"
+
+/** A character cue reduced to its name, dropping any `(V.O.)`-style extension. */
+function cueName(text: string): string {
+  return text.replace(/\s*\([^)]*\)\s*$/, '').trim()
+}
+
+/**
+ * Mark character cues that continue the same speaker within a scene. A cue is a
+ * continuation when the previous character to speak was this same character,
+ * with only action (or their own parentheticals) in between — no other speaker
+ * and no scene break. Renderers turn the flag into a trailing `(CONT'D)`.
+ *
+ * The running speaker resets at anything that ends the flow: a scene heading,
+ * transition, centered text, lyrics, or a forced page break.
+ */
+function markContinuations(elements: ScreenplayElement[]): void {
+  let lastSpeaker: string | null = null
+  for (const el of elements) {
+    switch (el.type) {
+      case 'character': {
+        const name = cueName(el.text)
+        if (name !== '' && name === lastSpeaker) el.cont = true
+        lastSpeaker = name
+        break
+      }
+      case 'dialogue':
+      case 'parenthetical':
+      case 'action':
+        // Belong to / interrupt the current speech without changing the speaker.
+        break
+      default:
+        // scene_heading, transition, centered, lyrics, page_break: reset.
+        lastSpeaker = null
+    }
+  }
+}
+
 function pushDialogueBlock(
   block: string[],
   startLine: number,
@@ -239,6 +278,8 @@ export function parse(source: string): Screenplay {
     }
     prev = { start, end, dialogue: isDialogueBlock }
   }
+
+  markContinuations(elements)
 
   return { titlePage, elements }
 }
