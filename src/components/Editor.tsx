@@ -15,6 +15,7 @@ import { OnChangeFountainPlugin } from './lexical/plugins/OnChangeFountainPlugin
 import { EmphasisShortcutsPlugin } from './lexical/plugins/EmphasisShortcutsPlugin'
 import { PageBreakGuidesPlugin } from './lexical/plugins/PageBreakGuidesPlugin'
 import { SectionBackgroundsPlugin } from './lexical/plugins/SectionBackgroundsPlugin'
+import { CapitalizationPlugin } from './lexical/plugins/CapitalizationPlugin'
 import { JumpToLinePlugin } from './lexical/plugins/JumpToLinePlugin'
 import { RevealPreviewPlugin } from './lexical/plugins/RevealPreviewPlugin'
 import type { Section } from '../fountain'
@@ -112,6 +113,7 @@ export function Editor({
         <div className="editor__surface" ref={surfaceRef} onScroll={handleScroll}>
           <SectionBackgroundsPlugin sections={sections} />
           <PageBreakGuidesPlugin breakLines={pageBreakLines} />
+          <CapitalizationPlugin />
           <PlainTextPlugin
             contentEditable={
               <ContentEditable className="editor__content" spellCheck={true} />

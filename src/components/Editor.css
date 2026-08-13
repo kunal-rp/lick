@@ -348,6 +348,271 @@
   margin: 0;
 }
 
+/* Capitalization checker: an underlay of clickable underlines over any text
+ * whose capitalization departs from screenplay format. The layer itself is
+ * inert; each hit box captures the click that opens the review dialog. */
+.caps-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.caps-hit {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--caps-color) 15%, transparent);
+  box-shadow: inset 0 -2px 0 0 var(--caps-color);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.1s ease;
+}
+
+.caps-hit:hover {
+  background: color-mix(in srgb, var(--caps-color) 28%, transparent);
+}
+
+/* Capitalize suggestions read as the accent; un-capitalize a cooler, distinct
+ * hue so the two directions are tellable apart at a glance. */
+.caps-hit--up {
+  --caps-color: var(--accent);
+}
+
+.caps-hit--down {
+  --caps-color: #5a8fd6;
+}
+
+/* Review dialog (portaled to <body>): a centered modal over a dimmed backdrop. */
+.caps-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.caps-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.caps-modal__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 92vw);
+  max-height: min(80vh, 640px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-bg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+
+.caps-modal__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.caps-modal__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.caps-modal__count {
+  flex: 1 1 auto;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.caps-modal__close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.caps-modal__close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.caps-modal__subhead {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.caps-modal__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.caps-modal__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.caps-modal__item {
+  border-bottom: 1px solid var(--border);
+}
+
+.caps-row {
+  display: flex;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.caps-row:hover {
+  background: var(--hover);
+}
+
+.caps-row__check {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.caps-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.caps-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.caps-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.caps-tag--up {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+}
+
+.caps-tag--down {
+  background: color-mix(in srgb, #5a8fd6 22%, transparent);
+  color: #4a7fc6;
+}
+
+.caps-row__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.caps-row__line {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.caps-row__diff {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.caps-row__from,
+.caps-row__to {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.caps-row__from {
+  background: rgba(192, 85, 63, 0.14);
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgba(192, 85, 63, 0.6);
+}
+
+.caps-row__arrow {
+  color: var(--text-faint);
+}
+
+.caps-row__to {
+  background: rgba(63, 157, 84, 0.16);
+  color: var(--text);
+}
+
+.caps-modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.caps-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.caps-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.caps-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.caps-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.caps-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  background: var(--accent);
+}
+
 /*
  * Phones: the toolbar holds format buttons, the find bar, and view toggles —
  * more than fits one row. Wrap instead of overflowing so the bar never exceeds
