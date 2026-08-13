@@ -198,6 +198,20 @@
   color: var(--text-muted);
 }
 
+/* Stands in for a collapsed run of unchanged lines. */
+.history__diff-gap {
+  padding: 2px 8px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-style: italic;
+  text-align: center;
+  user-select: none;
+}
+
+.history__diff-gap + .history__diff-gap {
+  display: none;
+}
+
 .history__actions {
   display: flex;
   justify-content: flex-end;

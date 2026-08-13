@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { HistorySnapshot } from '../history'
-import { diffLines, diffSummary } from '../diff'
+import { collapseUnchanged, diffLines, diffSummary } from '../diff'
 import './HistoryPanel.css'
 
 interface HistoryPanelProps {
@@ -119,17 +119,25 @@ export function HistoryPanel({
                       </p>
                     ) : (
                       <pre className="history__diff">
-                        {diffLines(snap.text, currentText).map((l, i) => (
-                          <div
-                            key={i}
-                            className={`history__diff-line history__diff-line--${l.op}`}
-                          >
-                            <span className="history__diff-gutter">
-                              {l.op === 'add' ? '+' : l.op === 'del' ? '−' : ' '}
-                            </span>
-                            {l.text || ' '}
-                          </div>
-                        ))}
+                        {collapseUnchanged(
+                          diffLines(snap.text, currentText),
+                        ).map((l, i) =>
+                          l.op === 'gap' ? (
+                            <div key={i} className="history__diff-gap">
+                              ⋯ {l.count} unchanged line{l.count === 1 ? '' : 's'}
+                            </div>
+                          ) : (
+                            <div
+                              key={i}
+                              className={`history__diff-line history__diff-line--${l.op}`}
+                            >
+                              <span className="history__diff-gutter">
+                                {l.op === 'add' ? '+' : l.op === 'del' ? '−' : ' '}
+                              </span>
+                              {l.text || ' '}
+                            </div>
+                          ),
+                        )}
                       </pre>
                     )}
                     <div className="history__actions">
