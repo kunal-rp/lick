@@ -78,6 +78,59 @@ export function rangeAtOffset(root: HTMLElement, offset: number): Range | null {
 }
 
 /**
+ * Resolve an absolute character offset to a concrete DOM boundary {node, offset}
+ * suitable for `Range.setStart`/`setEnd`. Walks text nodes and <br> breaks (each
+ * <br> contributing one "\n"); an offset that lands on a break boundary snaps to
+ * the end of the preceding text so the returned point is always inside text.
+ */
+function domBoundary(
+  root: HTMLElement,
+  target: number,
+): { node: Node; offset: number } | null {
+  const walker = document.createTreeWalker(
+    root,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+  )
+  let acc = 0
+  let lastText: Text | null = null
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.nodeValue?.length ?? 0
+      if (target <= acc + len) return { node, offset: target - acc }
+      acc += len
+      lastText = node as Text
+    } else if (node.nodeName === 'BR') {
+      if (target === acc && lastText !== null) {
+        return { node: lastText, offset: lastText.nodeValue?.length ?? 0 }
+      }
+      acc += 1
+    }
+  }
+  return lastText === null
+    ? null
+    : { node: lastText, offset: lastText.nodeValue?.length ?? 0 }
+}
+
+/**
+ * A DOM Range spanning the absolute offsets `[start, end)` within the
+ * contentEditable, or null if either endpoint can't be mapped. Callers use
+ * `getClientRects()` on it to draw highlights over the spanned text.
+ */
+export function rangeForSpan(
+  root: HTMLElement,
+  start: number,
+  end: number,
+): Range | null {
+  const from = domBoundary(root, start)
+  const to = domBoundary(root, end)
+  if (from === null || to === null) return null
+  const range = document.createRange()
+  range.setStart(from.node, from.offset)
+  range.setEnd(to.node, to.offset)
+  return range
+}
+
+/**
  * Viewport `top` of an absolute character offset within the contentEditable,
  * walking text nodes and <br> line breaks (each <br> contributes one "\n").
  * An empty line is located via the <br>'s own box: a collapsed range placed

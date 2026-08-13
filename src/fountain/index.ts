@@ -3,6 +3,8 @@
 export const FOUNTAIN_SPEC_VERSION = '1.1'
 
 export { parse, CONTD_SUFFIX } from './parse'
+export { detectCapitalization, applyCapSuggestions } from './capitalization'
+export type { CapSuggestion, CapKind } from './capitalization'
 export { renderEmphasis } from './emphasis'
 export { analyzeScript, buildInsights } from './insights'
 export { parseSections } from './sections'
