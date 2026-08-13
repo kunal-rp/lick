@@ -27,6 +27,13 @@ export interface ScreenplayElement {
    * preceding dialogue block is 'left'. Rendered as two side-by-side columns.
    */
   dual?: 'left' | 'right'
+  /**
+   * True on a `character` cue that continues the same character's speech within
+   * a scene — i.e. the previous speaker was this same character, interrupted
+   * only by action. Renderers append a `(CONT'D)` mark; the cue `text` itself
+   * stays clean so name-based analysis (insights) is unaffected.
+   */
+  cont?: boolean
 }
 
 /** One title-page entry, e.g. `Author: Stu Maschwitz` or a multi-value key. */
