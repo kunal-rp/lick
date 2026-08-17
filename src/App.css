@@ -38,29 +38,6 @@
   }
 }
 
-/*
- * Mobile: editor on top, preview stacked inline below it (rendered only at
- * phone width — see useIsMobile / App.tsx). The editor is the core surface, so
- * it gets the larger share; each pane scrolls internally.
- */
-.mobilestack {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.mobilestack__pane {
-  flex: 3 1 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.mobilestack__pane--preview {
-  flex: 2 1 0;
-  border-top: 1px solid var(--border);
-}
-
 /* Right-hand pane: preview stacked above the collapsible insights panel. */
 .rightstack {
   display: flex;
