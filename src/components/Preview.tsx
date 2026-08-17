@@ -28,6 +28,8 @@ interface PreviewProps {
   showSections?: boolean
   /** Toggle the section rendering (wired to the toolbar button). */
   onToggleSections?: () => void
+  /** Return to the editor (mobile: editor/preview are full-screen toggles). */
+  onExitToEditor?: () => void
   /** Comments anchored to the version currently shown. */
   comments?: Comment[]
   /** The version id to anchor new comments to (null hides commenting). */
@@ -127,6 +129,7 @@ export function Preview({
   sections = [],
   showSections = false,
   onToggleSections,
+  onExitToEditor,
   comments = [],
   versionId = null,
   authorName = 'You',
@@ -624,26 +627,33 @@ export function Preview({
     return () => ro.disconnect()
   }, [autoFit, isMobile, fitZoom])
 
-  // Mobile has no zoom controls, so fit the full page width to the pane
-  // automatically — recomputing whenever the pane resizes (rotation, keyboard).
+  // Fit the full page width to the pane (mobile). Unlike the desktop `fitZoom`,
+  // this fits the whole 8.5in sheet so nothing crops on a phone.
+  const fitToPane = useCallback(() => {
+    const scroll = scrollRef.current
+    if (scroll === null) return
+    const style = getComputedStyle(scroll)
+    const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+    const pageWidthPx = 8.5 * 96 // full sheet, so nothing crops
+    const available = scroll.clientWidth - padX
+    setZoom(clampZoom(Math.floor((available / pageWidthPx) * 100)))
+  }, [])
+
+  // Mobile auto-fit: fit the page to the pane on load and on every pane resize
+  // (rotation, keyboard), unless the reader has pinch-zoomed by hand.
   useEffect(() => {
     if (!isMobile) return
     const scroll = scrollRef.current
     if (scroll === null) return
     const fit = () => {
       if (userZoomedRef.current) return // respect a manual pinch
-      const style = getComputedStyle(scroll)
-      const padX =
-        parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
-      const pageWidthPx = 8.5 * 96 // full sheet, so nothing crops
-      const available = scroll.clientWidth - padX
-      setZoom(clampZoom(Math.floor((available / pageWidthPx) * 100)))
+      fitToPane()
     }
     fit()
     const observer = new ResizeObserver(fit)
     observer.observe(scroll)
     return () => observer.disconnect()
-  }, [isMobile])
+  }, [isMobile, fitToPane])
 
   // The sheets are scaled with `transform`, which (unlike `zoom`) doesn't shrink
   // the element's layout box — so the scroll region would otherwise reserve the
@@ -961,6 +971,20 @@ export function Preview({
   return (
     <div className="preview">
       <div className="preview__toolbar">
+        {isMobile && onExitToEditor !== undefined && (
+          <>
+            <button
+              type="button"
+              className="preview__edit"
+              onClick={onExitToEditor}
+              title="Back to the editor"
+            >
+              <span aria-hidden="true">✏️</span> Edit
+            </button>
+            <span className="preview__mode-label">Preview</span>
+            <span className="preview__mode-spacer" aria-hidden="true" />
+          </>
+        )}
         <label className="preview__zoom">
           <span className="preview__zoom-label">Zoom</span>
           <input
@@ -981,14 +1005,26 @@ export function Preview({
         <button
           type="button"
           className={`preview__zoom-fit${
-            autoFit ? ' preview__zoom-fit--active' : ''
+            !isMobile && autoFit ? ' preview__zoom-fit--active' : ''
           }`}
-          onClick={() => setAutoFit((v) => !v)}
-          aria-pressed={autoFit}
+          // Desktop: toggle sticky auto-fit. Mobile has no zoom slider and
+          // already auto-fits, so here Fit is a one-shot "re-fit" that clears any
+          // manual pinch and refits the page to the pane.
+          onClick={() => {
+            if (isMobile) {
+              userZoomedRef.current = false
+              fitToPane()
+            } else {
+              setAutoFit((v) => !v)
+            }
+          }}
+          aria-pressed={isMobile ? undefined : autoFit}
           title={
-            autoFit
-              ? 'Auto-fit on: the preview refits as the pane resizes'
-              : 'Fit the page to the pane and keep it fitted on resize'
+            isMobile
+              ? 'Fit the page to the screen'
+              : autoFit
+                ? 'Auto-fit on: the preview refits as the pane resizes'
+                : 'Fit the page to the pane and keep it fitted on resize'
           }
         >
           Fit

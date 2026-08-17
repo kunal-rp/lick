@@ -81,9 +81,9 @@ async function loadTree(folderId: string): Promise<{
 export default function App() {
   const auth = useDriveAuth()
   const { folder, picking, choose } = useWorkingFolder()
-  // Phone-width layout: the file nav becomes a floating drawer, the editor
-  // fills the screen, and the preview stacks inline below it (no side split,
-  // no Characters & Locations panel).
+  // Phone-width layout: the file nav becomes a floating drawer, and the editor
+  // and preview become mutually exclusive full-screen views toggled by the
+  // Preview button (no side split, no Characters & Locations panel).
   const isMobile = useIsMobile()
 
   // The full directory: script folders and each script's version files,
@@ -925,6 +925,7 @@ export default function App() {
                     sections={sections}
                     showSections={showSections}
                     onToggleSections={() => setShowSections((v) => !v)}
+                    onExitToEditor={() => setShowPreview(false)}
                     versionId={selectedVersionId}
                     comments={comments.filter(
                       (c) => c.versionId === selectedVersionId,
@@ -937,18 +938,11 @@ export default function App() {
                 // The Characters & Locations panel only accompanies the
                 // preview, so with the preview hidden the editor fills the pane.
                 if (!showPreview) return editorNode
-                // Mobile: the editor is the core surface, so the preview stacks
-                // inline below it — no side-by-side split, no insights panel.
-                if (isMobile) {
-                  return (
-                    <div className="mobilestack">
-                      <div className="mobilestack__pane">{editorNode}</div>
-                      <div className="mobilestack__pane mobilestack__pane--preview">
-                        {previewNode}
-                      </div>
-                    </div>
-                  )
-                }
+                // Mobile: editor and preview are mutually exclusive full-screen
+                // views. With the preview on it takes the whole screen (its
+                // toolbar carries the button back to the editor) — no
+                // side-by-side split, no insights panel.
+                if (isMobile) return previewNode
                 return (
                   <SplitPane
                     left={editorNode}
