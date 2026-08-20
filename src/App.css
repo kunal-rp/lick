@@ -4,6 +4,18 @@
   min-height: 0;
 }
 
+/*
+ * Mobile: size to the visual viewport, not the layout viewport. `--app-h` is
+ * kept in sync with `window.visualViewport.height` (useAppViewportHeight) so the
+ * workspace shrinks to the space above the on-screen keyboard; `100dvh` is the
+ * fallback before the first measurement (and where VisualViewport is missing).
+ */
+@media (max-width: 768px) {
+  .workspace {
+    height: var(--app-h, 100dvh);
+  }
+}
+
 .workspace__main {
   flex: 1 1 auto;
   min-width: 0;
