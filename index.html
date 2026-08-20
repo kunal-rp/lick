@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget=resizes-content: on Android Chrome, the on-screen
+         keyboard shrinks the layout viewport (so dvh/% heights reflow above it).
+         iOS Safari ignores it — the VisualViewport hook (useAppViewportHeight)
+         covers iOS. Zoom is left enabled (no maximum-scale) for accessibility. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
+    />
     <title>kunal's scripts</title>
     <!-- Google Identity Services (OAuth) and the gapi loader (Picker API, used
          in a later stage). Loaded via script tags — no npm SDK needed. -->

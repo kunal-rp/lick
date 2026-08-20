@@ -52,6 +52,7 @@ import { loadLastOpened, saveLastOpened } from './lastOpened'
 import { loadLayout, saveLayout } from './layout'
 import { loadTheme, saveTheme, type Theme } from './theme'
 import { useIsMobile } from './useIsMobile'
+import { useAppViewportHeight } from './useAppViewportHeight'
 import './App.css'
 
 // Background auto-save: persist after the user pauses, or after enough edits,
@@ -85,6 +86,10 @@ export default function App() {
   // and preview become mutually exclusive full-screen views toggled by the
   // Preview button (no side split, no Characters & Locations panel).
   const isMobile = useIsMobile()
+
+  // On mobile, size the workspace to the visual viewport so the editor sits
+  // above the on-screen keyboard rather than behind it (see App.css `--app-h`).
+  useAppViewportHeight(isMobile)
 
   // The full directory: script folders and each script's version files,
   // eagerly loaded so the left-nav tree shows everything.

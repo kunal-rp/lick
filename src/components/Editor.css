@@ -619,9 +619,30 @@
  * the screen width or scrolls sideways. Kept in sync with useIsMobile's 768px.
  */
 @media (max-width: 768px) {
+  /*
+   * Accessory-bar layout: the toolbar rides at the bottom of the editor, just
+   * above the on-screen keyboard. The editor column is sized to the visual
+   * viewport (App.css `--app-h`), so its bottom edge tracks the keyboard's top;
+   * ordering the surface first and the toolbar last pins the controls there —
+   * reachable while typing instead of scrolled off the top of the document.
+   */
+  .editor__surface {
+    order: 1;
+  }
+
   .toolbar {
+    order: 2;
     flex-wrap: wrap;
     max-width: 100%;
+    /* Now a bottom strip: separate it from the text above, not below. */
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+  }
+
+  /* Anchored at the bottom, the find & replace popup must open upward. */
+  .toolbar__replace {
+    top: auto;
+    bottom: calc(100% + 6px);
   }
 
   /* Let the find bar take the remaining row width and shrink its input. */

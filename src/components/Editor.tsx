@@ -18,6 +18,7 @@ import { SectionBackgroundsPlugin } from './lexical/plugins/SectionBackgroundsPl
 import { CapitalizationPlugin } from './lexical/plugins/CapitalizationPlugin'
 import { JumpToLinePlugin } from './lexical/plugins/JumpToLinePlugin'
 import { RevealPreviewPlugin } from './lexical/plugins/RevealPreviewPlugin'
+import { CaretVisibilityPlugin } from './lexical/plugins/CaretVisibilityPlugin'
 import type { Section } from '../fountain'
 import './Editor.css'
 
@@ -130,6 +131,7 @@ export function Editor({
         <EmphasisShortcutsPlugin />
         <JumpToLinePlugin target={jumpTo ?? null} />
         <RevealPreviewPlugin onReveal={onRevealInPreview} />
+        <CaretVisibilityPlugin scrollRef={surfaceRef} />
         <OnChangeFountainPlugin onChange={onChange} />
       </LexicalComposer>
     </div>
