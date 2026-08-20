@@ -43,17 +43,18 @@ export function CaretVisibilityPlugin({ scrollRef }: Props) {
       const range = selection.getRangeAt(0)
       if (!root.contains(range.startContainer)) return
 
-      // The caret rect. A collapsed range can report an empty rect (notably on
-      // empty lines in Safari), so fall back to the enclosing element's rect.
+      // The collapsed-caret rect. Prefer getClientRects (a real caret box);
+      // fall back to getBoundingClientRect. Crucially we do NOT fall back to the
+      // enclosing element: this is a single-paragraph plain-text editor, so that
+      // element is the whole document block whose top sits at the content top —
+      // using it would scroll to the very top on every keystroke. If we can't
+      // get a genuine caret rect, do nothing rather than scroll blindly.
       const caret = range.cloneRange()
       caret.collapse(false)
-      let rect: DOMRect | undefined = caret.getClientRects()[0]
-      if (rect === undefined || (rect.height === 0 && rect.top === 0)) {
-        let node: Node | null = caret.startContainer
-        if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
-        if (node instanceof Element) rect = node.getBoundingClientRect()
-      }
-      if (rect === undefined) return
+      const rect: DOMRect =
+        caret.getClientRects()[0] ?? caret.getBoundingClientRect()
+      // A degenerate all-zero rect means no reliable caret position — bail.
+      if (rect.top === 0 && rect.left === 0 && rect.height === 0) return
 
       const vv = window.visualViewport
       const viewBottom = vv !== null ? vv.offsetTop + vv.height : window.innerHeight

@@ -5,13 +5,21 @@
 }
 
 /*
- * Mobile: size to the visual viewport, not the layout viewport. `--app-h` is
- * kept in sync with `window.visualViewport.height` (useAppViewportHeight) so the
- * workspace shrinks to the space above the on-screen keyboard; `100dvh` is the
- * fallback before the first measurement (and where VisualViewport is missing).
+ * Mobile: pin the workspace to the *visual* viewport, not the layout viewport.
+ * `--app-h`/`--app-top` track window.visualViewport (useAppViewportHeight), so
+ * the workspace matches the space above the on-screen keyboard exactly — even
+ * when iOS scrolls the visual viewport down (offsetTop) to reveal the caret,
+ * which would otherwise leave empty page showing below the bottom toolbar.
+ * `position: fixed` also keeps the layout viewport itself from scrolling.
+ * Fallbacks (100dvh / 0) apply before the first measurement and where the
+ * VisualViewport API is missing.
  */
 @media (max-width: 768px) {
   .workspace {
+    position: fixed;
+    left: 0;
+    top: var(--app-top, 0px);
+    width: 100%;
     height: var(--app-h, 100dvh);
   }
 }
