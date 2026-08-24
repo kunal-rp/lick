@@ -5,10 +5,10 @@ import './FileNav.css'
 
 interface FileNavProps {
   folderName: string
-  scripts: DriveFile[]
-  versionsByScript: Record<string, DriveFile[]>
-  expandedScripts: Set<string>
-  selectedScriptId: string | null
+  projects: DriveFile[]
+  versionsByProject: Record<string, DriveFile[]>
+  expandedProjects: Set<string>
+  selectedProjectId: string | null
   selectedVersionId: string | null
   loading: boolean
   busy: boolean
@@ -16,24 +16,24 @@ interface FileNavProps {
   theme: Theme
   onToggle: () => void
   onToggleTheme: () => void
-  onToggleExpand: (scriptId: string) => void
-  onSelectScript: (script: DriveFile) => void
-  onSelectVersion: (scriptId: string, versionId: string) => void
-  onDeleteVersion: (scriptId: string, versionId: string) => void
-  onNewScript: () => void
+  onToggleExpand: (projectId: string) => void
+  onSelectProject: (project: DriveFile) => void
+  onSelectVersion: (projectId: string, versionId: string) => void
+  onDeleteVersion: (projectId: string, versionId: string) => void
+  onNewProject: () => void
   onChangeFolder: () => void
 }
 
 /**
  * Collapsible left panel showing the full project directory as a tree:
- * script folders with their version files nested underneath.
+ * project folders with their version files nested underneath.
  */
 export function FileNav({
   folderName,
-  scripts,
-  versionsByScript,
-  expandedScripts,
-  selectedScriptId,
+  projects,
+  versionsByProject,
+  expandedProjects,
+  selectedProjectId,
   selectedVersionId,
   loading,
   busy,
@@ -42,10 +42,10 @@ export function FileNav({
   onToggle,
   onToggleTheme,
   onToggleExpand,
-  onSelectScript,
+  onSelectProject,
   onSelectVersion,
   onDeleteVersion,
-  onNewScript,
+  onNewProject,
   onChangeFolder,
 }: FileNavProps) {
   if (collapsed) {
@@ -84,10 +84,10 @@ export function FileNav({
         <button
           type="button"
           className="filenav__action"
-          onClick={onNewScript}
+          onClick={onNewProject}
           disabled={busy}
         >
-          + New script
+          + New project
         </button>
         <button
           type="button"
@@ -116,38 +116,38 @@ export function FileNav({
         </div>
         {loading ? (
           <p className="filenav__msg">Loading…</p>
-        ) : scripts.length === 0 ? (
-          <p className="filenav__msg">No scripts yet. Create one above.</p>
+        ) : projects.length === 0 ? (
+          <p className="filenav__msg">No projects yet. Create one above.</p>
         ) : (
           <div className="tree__children">
-          {scripts.map((script) => {
-            const expanded = expandedScripts.has(script.id)
-            const files = versionsByScript[script.id] ?? []
+          {projects.map((project) => {
+            const expanded = expandedProjects.has(project.id)
+            const files = versionsByProject[project.id] ?? []
             const versions = parseVersions(files)
             const pdfs = listPdfs(files)
             const latestId = versions[0]?.file.id ?? null
             return (
-              <div key={script.id} className="tree__script">
+              <div key={project.id} className="tree__project">
                 <div
                   className={`tree__row${
-                    script.id === selectedScriptId ? ' is-active' : ''
+                    project.id === selectedProjectId ? ' is-active' : ''
                   }`}
                 >
                   <button
                     type="button"
                     className="tree__twisty"
                     title={expanded ? 'Collapse' : 'Expand'}
-                    onClick={() => onToggleExpand(script.id)}
+                    onClick={() => onToggleExpand(project.id)}
                   >
                     {expanded ? '▾' : '▸'}
                   </button>
                   <button
                     type="button"
                     className="tree__label"
-                    title={script.name}
-                    onClick={() => onSelectScript(script)}
+                    title={project.name}
+                    onClick={() => onSelectProject(project)}
                   >
-                    <span aria-hidden="true">📁</span> {script.name}
+                    <span aria-hidden="true">📁</span> {project.name}
                   </button>
                 </div>
 
@@ -167,7 +167,7 @@ export function FileNav({
                             type="button"
                             className="tree__version"
                             title={v.file.name}
-                            onClick={() => onSelectVersion(script.id, v.file.id)}
+                            onClick={() => onSelectVersion(project.id, v.file.id)}
                           >
                             <span aria-hidden="true">📄</span> {v.label}
                             {v.file.id === latestId ? ' (latest)' : ''}
@@ -177,7 +177,7 @@ export function FileNav({
                             className="tree__delete"
                             title="Delete version"
                             disabled={busy}
-                            onClick={() => onDeleteVersion(script.id, v.file.id)}
+                            onClick={() => onDeleteVersion(project.id, v.file.id)}
                           >
                             🗑
                           </button>

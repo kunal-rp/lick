@@ -1,5 +1,5 @@
-// Script comments. All comments for a script — across every version — live in
-// a single JSON file (COMMENTS_FILENAME) in the script's Drive folder. That
+// Project comments. All comments for a project — across every version — live in
+// a single JSON file (COMMENTS_FILENAME) in the project's Drive folder. That
 // file is data, never a screenplay version: it is excluded from the version
 // list and is never opened in the editor (see drive/versions.ts).
 //

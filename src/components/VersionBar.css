@@ -31,7 +31,7 @@
   background: var(--hover);
 }
 
-.verbar__script {
+.verbar__project {
   min-width: 0;
   max-width: 40%;
   font-size: 13px;
@@ -110,6 +110,20 @@
   color: var(--on-accent);
 }
 
+/* Notes toggle (mobile only) — on desktop, Notes lives in the editor toolbar. */
+.verbar__notes {
+  display: none;
+  font-size: 15px;
+  line-height: 1;
+  padding: 5px 9px;
+}
+
+.verbar__notes--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
 /* Options menu (mobile only) — hidden on desktop, where the actions are inline. */
 .verbar__menu {
   position: relative;
@@ -177,8 +191,8 @@
     display: inline-flex;
   }
 
-  /* The script name may claim the first row on its own; let it truncate. */
-  .verbar__script {
+  /* The project name may claim the first row on its own; let it truncate. */
+  .verbar__project {
     max-width: 100%;
   }
 
@@ -199,5 +213,10 @@
 
   .verbar__menu {
     display: block;
+  }
+
+  .verbar__notes {
+    display: inline-flex;
+    align-items: center;
   }
 }

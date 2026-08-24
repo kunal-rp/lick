@@ -1,8 +1,9 @@
 import type { DriveFile } from './files'
 import { COMMENTS_FILENAME } from '../comments'
 import { HISTORY_FILENAME } from '../history'
+import { NOTES_FILENAME, NOTE_ASSET_PREFIX } from '../notes'
 
-// Versions are files named `<script name>_v<N>.fountain` inside a script
+// Versions are files named `<project name>_v<N>.fountain` inside a project
 // folder. The number orders them; the highest is the most recent. Files that
 // don't match the scheme are still listed (labeled by name) and sorted after
 // numbered ones.
@@ -30,19 +31,35 @@ export function isPdf(file: DriveFile): boolean {
   return file.mimeType === 'application/pdf' || /\.pdf$/i.test(file.name)
 }
 
-/** Whether a file is the script's comments store (data, not a version). */
+/** Whether a file is the project's comments store (data, not a version). */
 export function isCommentsFile(file: DriveFile): boolean {
   return file.name === COMMENTS_FILENAME
 }
 
-/** Whether a file is the script's edit-history store (data, not a version). */
+/** Whether a file is the project's edit-history store (data, not a version). */
 export function isHistoryFile(file: DriveFile): boolean {
   return file.name === HISTORY_FILENAME
 }
 
+/** Whether a file is the project's notes store (data, not a version). */
+export function isNotesFile(file: DriveFile): boolean {
+  return file.name === NOTES_FILENAME
+}
+
+/** Whether a file backs a note's inline image/video (data, not a version). */
+export function isNoteAssetFile(file: DriveFile): boolean {
+  return file.name.startsWith(NOTE_ASSET_PREFIX)
+}
+
 /** Files that are neither PDF exports nor a data sidecar. */
 function isVersionFile(file: DriveFile): boolean {
-  return !isPdf(file) && !isCommentsFile(file) && !isHistoryFile(file)
+  return (
+    !isPdf(file) &&
+    !isCommentsFile(file) &&
+    !isHistoryFile(file) &&
+    !isNotesFile(file) &&
+    !isNoteAssetFile(file)
+  )
 }
 
 /** Parse and order the editable version files, most recent first. */
@@ -82,16 +99,16 @@ export function nextVersionNumber(files: DriveFile[]): number {
   return max + 1
 }
 
-// Normalize a script name for use in a filename: drop punctuation and turn
+// Normalize a project name for use in a filename: drop punctuation and turn
 // runs of whitespace into single underscores.
-function slugifyScriptName(scriptName: string): string {
-  const slug = scriptName
+function slugifyProjectName(projectName: string): string {
+  const slug = projectName
     .trim()
     .replace(/\s+/g, '_')
     .replace(/[^\w]/g, '')
-  return slug || 'script'
+  return slug || 'project'
 }
 
-export function versionFileName(scriptName: string, n: number): string {
-  return `${slugifyScriptName(scriptName)}_v${n}.fountain`
+export function versionFileName(projectName: string, n: number): string {
+  return `${slugifyProjectName(projectName)}_v${n}.fountain`
 }

@@ -1,7 +1,7 @@
 import { getValidToken } from './auth'
 
 // Drive v3 REST access (authenticated via the OAuth token). Supports the app's
-// model: the working folder holds script *folders*, each containing version
+// model: the working folder holds project *folders*, each containing version
 // *files*.
 
 export interface DriveFile {
@@ -42,12 +42,12 @@ async function listChildren(
   return data.files ?? []
 }
 
-/** Script folders directly inside the working folder. */
+/** Project folders directly inside the working folder. */
 export function listFolders(parentId: string): Promise<DriveFile[]> {
   return listChildren(parentId, true)
 }
 
-/** Version files directly inside a script folder. */
+/** Version files directly inside a project folder. */
 export function listFiles(parentId: string): Promise<DriveFile[]> {
   return listChildren(parentId, false)
 }
@@ -63,7 +63,16 @@ export async function readFile(file: DriveFile): Promise<string> {
   return res.text()
 }
 
-/** Create a subfolder (a new script) and return it. */
+/** Read a file's raw bytes as a Blob (used for note image/video media). */
+export async function readFileBlob(fileId: string): Promise<Blob> {
+  const res = await fetch(`${API}/files/${fileId}?alt=media`, {
+    headers: await authHeaders(),
+  })
+  if (!res.ok) throw new Error(`Drive read failed (${res.status})`)
+  return res.blob()
+}
+
+/** Create a subfolder (a new project) and return it. */
 export async function createFolder(
   parentId: string,
   name: string,

@@ -1,0 +1,445 @@
+/* Right-side drawer holding the project's notes. The visual STRUCTURE mirrors
+   Apple Notes (big title + search + date/preview rows + bottom compose bar in
+   the list; date header + title + body + bottom attach bar in a note), while
+   the skin — colors and serif type — comes from the app's own theme tokens. */
+.notes {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  width: min(420px, 94vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+}
+
+/* ---- Top nav bar (both views) ---- */
+.notes__nav {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notes__nav-spacer {
+  flex: 1 1 auto;
+}
+
+.notes__nav-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notes__nav-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+.notes__nav-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.notes__nav-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.notes__nav-btn--danger:hover:not(:disabled) {
+  color: #c0553f;
+}
+
+.notes__back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px 4px 2px;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.notes__back svg {
+  width: 20px;
+  height: 20px;
+}
+
+.notes__back:hover {
+  opacity: 0.8;
+}
+
+/* ---- Scroll region (both views) ---- */
+.notes__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ---- List view ---- */
+.notes__bigtitle {
+  margin: 10px 0 8px;
+  padding: 0 16px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.notes__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 12px 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--text-faint);
+}
+
+.notes__search-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.notes__search-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.notes__search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.notes__search-input::placeholder {
+  color: var(--text-faint);
+}
+
+.notes__search-input:focus {
+  outline: none;
+}
+
+.notes__search-clear {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notes__empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.notes__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notes__item {
+  margin: 0;
+}
+
+.notes__row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Divider inset from the left, aligned under the text — the Apple Notes look. */
+.notes__item:not(:last-child) .notes__row::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 0;
+  bottom: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.notes__row:hover {
+  background: var(--hover);
+}
+
+.notes__row-title {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notes__row-sub {
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.notes__row-date {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.notes__row-preview {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-faint);
+}
+
+/* ---- Bottom bar (both views) ---- */
+.notes__bottombar {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 46px;
+  padding: 0 10px;
+  border-top: 1px solid var(--border);
+}
+
+.notes__bottombar-side {
+  flex: 1 1 0;
+}
+
+.notes__count {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.notes__compose {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.notes__compose svg {
+  width: 22px;
+  height: 22px;
+}
+
+.notes__compose:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.notes__compose:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- Single-note view ---- */
+.notes__doc {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 40px;
+}
+
+.notes__doc-date {
+  align-self: center;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.notes__doc-title {
+  flex: 0 0 auto;
+  margin-bottom: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.notes__doc-title::placeholder {
+  color: var(--text-faint);
+}
+
+.notes__doc-title:focus {
+  outline: none;
+}
+
+.notes__text {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  resize: none;
+  overflow: hidden;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.notes__text::placeholder {
+  color: var(--text-faint);
+}
+
+.notes__text:focus {
+  outline: none;
+}
+
+/* Inline image/video block. */
+.notes__media {
+  position: relative;
+  margin: 8px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.notes__media-el {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  background: #000;
+}
+
+.notes__media-loading,
+.notes__media-error {
+  padding: 22px 12px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.notes__media-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notes__media-del:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.notes__media-del:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- Note attach bar ---- */
+.notes__attach {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.notes__attach svg {
+  width: 22px;
+  height: 22px;
+}
+
+.notes__attach:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.notes__attach:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.notes__spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--accent-soft);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: notes-spin 0.7s linear infinite;
+}
+
+@keyframes notes-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.notes__file-input {
+  display: none;
+}
+
+/* Mobile: the notes UI takes over the whole editor area (no side drawer). */
+@media (max-width: 768px) {
+  .notes {
+    width: 100%;
+    border-left: none;
+    box-shadow: none;
+  }
+}
