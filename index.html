@@ -5,10 +5,14 @@
     <!-- interactive-widget=resizes-content: on Android Chrome, the on-screen
          keyboard shrinks the layout viewport (so dvh/% heights reflow above it).
          iOS Safari ignores it — the VisualViewport hook (useAppViewportHeight)
-         covers iOS. Zoom is left enabled (no maximum-scale) for accessibility. -->
+         covers iOS.
+         maximum-scale=1 + user-scalable=no: disable the browser's pinch-zoom so
+         the editor/notes/list views don't zoom on mobile. The preview has its
+         own app-level pinch/zoom (see Preview.tsx), which is unaffected by this
+         and remains the one place that zooms. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content"
     />
     <title>kunal's scripts</title>
     <!-- Google Identity Services (OAuth) and the gapi loader (Picker API, used
