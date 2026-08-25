@@ -146,14 +146,14 @@
   text-overflow: ellipsis;
 }
 
-/* Scripts nested under the working folder. */
+/* Projects nested under the working folder. */
 .tree__children {
   padding-left: 10px;
   border-left: 1px solid var(--border);
   margin-left: 10px;
 }
 
-/* Script row (folder). */
+/* Project row (folder). */
 .tree__row {
   display: flex;
   align-items: center;
@@ -194,7 +194,7 @@
   cursor: pointer;
 }
 
-/* Version leaves under a script. */
+/* Version leaves under a project. */
 .tree__versions {
   margin-left: 18px;
   border-left: 1px solid var(--border);
@@ -298,7 +298,7 @@
  * Mobile: the file nav is never inline. Collapsed, it's absent entirely — the
  * toggle lives inline in the top bar (see VersionBar's .verbar__nav and App's
  * .mobilebar). Expanded, it's a drawer that slides over the editor with a
- * dimmed backdrop. Selecting a script/version closes it (see App.tsx).
+ * dimmed backdrop. Selecting a project/version closes it (see App.tsx).
  */
 @media (max-width: 768px) {
   /* Collapsed → nothing; the top-bar button is the only affordance. */

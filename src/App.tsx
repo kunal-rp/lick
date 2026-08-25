@@ -6,6 +6,7 @@ import { SplitPane } from './components/SplitPane'
 import { FileNav } from './components/FileNav'
 import { VersionBar } from './components/VersionBar'
 import { HistoryPanel } from './components/HistoryPanel'
+import { NotesPanel } from './components/NotesPanel'
 import {
   createBinaryFile,
   createFile,
@@ -13,6 +14,7 @@ import {
   listFiles,
   listFolders,
   readFile,
+  readFileBlob,
   trashFile,
   updateBinaryFileContent,
   updateFileContent,
@@ -21,6 +23,7 @@ import {
 import {
   isCommentsFile,
   isHistoryFile,
+  isNotesFile,
   isPdf,
   nextVersionNumber,
   parseVersions,
@@ -46,6 +49,19 @@ import {
   type Comment,
   type CommentAnchor,
 } from './comments'
+import {
+  NOTES_FILENAME,
+  NOTE_ASSET_PREFIX,
+  makeId,
+  makeMediaBlock,
+  makeNote,
+  mediaBlocks,
+  normalizeBlocks,
+  parseNotes,
+  serializeNotes,
+  type MediaBlock,
+  type Note,
+} from './notes'
 import { useDriveAuth } from './drive/useDriveAuth'
 import { useWorkingFolder } from './drive/useWorkingFolder'
 import { loadLastOpened, saveLastOpened } from './lastOpened'
@@ -66,17 +82,21 @@ const AUTOSAVE_CHANGE_THRESHOLD = 40
 // never race — the version saves.
 const HISTORY_WRITE_DEBOUNCE_MS = 5000
 
-// Load the whole directory: every script folder plus its version files, so the
+// Notes are edited live in memory; the JSON file is written this long after the
+// last change so typing in a note never blocks on a Drive round-trip.
+const NOTES_WRITE_DEBOUNCE_MS = 1500
+
+// Load the whole directory: every project folder plus its version files, so the
 // left-nav tree can show the full project at once.
 async function loadTree(folderId: string): Promise<{
-  scripts: DriveFile[]
-  versionsByScript: Record<string, DriveFile[]>
+  projects: DriveFile[]
+  versionsByProject: Record<string, DriveFile[]>
 }> {
-  const scripts = await listFolders(folderId)
+  const projects = await listFolders(folderId)
   const entries = await Promise.all(
-    scripts.map(async (s) => [s.id, await listFiles(s.id)] as const),
+    projects.map(async (s) => [s.id, await listFiles(s.id)] as const),
   )
-  return { scripts, versionsByScript: Object.fromEntries(entries) }
+  return { projects, versionsByProject: Object.fromEntries(entries) }
 }
 
 export default function App() {
@@ -91,16 +111,16 @@ export default function App() {
   // above the on-screen keyboard rather than behind it (see App.css `--app-h`).
   useAppViewportHeight(isMobile)
 
-  // The full directory: script folders and each script's version files,
+  // The full directory: project folders and each project's version files,
   // eagerly loaded so the left-nav tree shows everything.
-  const [scripts, setScripts] = useState<DriveFile[]>([])
-  const [versionsByScript, setVersionsByScript] = useState<
+  const [projects, setProjects] = useState<DriveFile[]>([])
+  const [versionsByProject, setVersionsByProject] = useState<
     Record<string, DriveFile[]>
   >({})
   const [treeLoading, setTreeLoading] = useState(false)
-  const [expandedScripts, setExpandedScripts] = useState<Set<string>>(new Set())
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
 
-  const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
 
   // Last-loaded/saved content of the selected version; null while loading.
@@ -138,25 +158,39 @@ export default function App() {
   // its text — used when restoring a history snapshot into the open version.
   const [editorReloadNonce, setEditorReloadNonce] = useState(0)
 
-  // Comments for the selected script (all versions), from its comments.json.
+  // Comments for the selected project (all versions), from its comments.json.
   const [comments, setComments] = useState<Comment[]>([])
   const commentsFileIdRef = useRef<string | null>(null)
 
-  // Recent edit-history snapshots for the selected script (all versions), from
+  // Recent edit-history snapshots for the selected project (all versions), from
   // its history.json. Captured as the user edits; browsable in the History
   // drawer, where any snapshot can be restored.
   const [history, setHistory] = useState<HistorySnapshot[]>([])
   const [showHistory, setShowHistory] = useState(false)
   // Live mirror of `history` for the async snapshot recorder/writer, plus the
-  // script it belongs to and the Drive file id (created lazily on first write).
+  // project it belongs to and the Drive file id (created lazily on first write).
   const historyRef = useRef<HistorySnapshot[]>([])
-  const historyScriptIdRef = useRef<string | null>(null)
+  const historyProjectIdRef = useRef<string | null>(null)
   const historyFileIdRef = useRef<string | null>(null)
-  // Which script's history is loaded, so a versionsByScript refresh (e.g. after
+  // Which project's history is loaded, so a versionsByProject refresh (e.g. after
   // creating history.json) doesn't clobber freshly recorded in-memory snapshots.
-  const loadedHistoryScriptRef = useRef<string | null>(null)
+  const loadedHistoryProjectRef = useRef<string | null>(null)
   const historyDirtyRef = useRef(false)
   const historyWriteTimer = useRef<number>(0)
+
+  // Notes for the selected project (all versions), from its notes.json. Edited
+  // live in the Notes drawer; writes to Drive are debounced. Mirrored to refs
+  // for the async writer, guarded like history so a project switch mid-flush
+  // can't cross projects.
+  const [notes, setNotes] = useState<Note[]>([])
+  const [showNotes, setShowNotes] = useState(layoutRef.current.showNotes)
+  const notesRef = useRef<Note[]>([])
+  const notesProjectIdRef = useRef<string | null>(null)
+  const notesFileIdRef = useRef<string | null>(null)
+  const loadedNotesProjectRef = useRef<string | null>(null)
+  const notesDirtyRef = useRef(false)
+  const notesWriteTimer = useRef<number>(0)
+
   // True while a create/rename/new-version Drive write is in flight.
   const [busy, setBusy] = useState(false)
   // Last Drive-operation error message, shown to the user.
@@ -202,10 +236,10 @@ export default function App() {
   }, [])
 
   const folderId = folder?.id ?? null
-  const selectedScript = scripts.find((s) => s.id === selectedScriptId) ?? null
+  const selectedProject = projects.find((s) => s.id === selectedProjectId) ?? null
   const versions = useMemo(
-    () => parseVersions(versionsByScript[selectedScriptId ?? ''] ?? []),
-    [versionsByScript, selectedScriptId],
+    () => parseVersions(versionsByProject[selectedProjectId ?? ''] ?? []),
+    [versionsByProject, selectedProjectId],
   )
   const dirty = content !== null && source !== content
   // Section ranges parsed from the live source, shared by the editor (tinted
@@ -213,7 +247,7 @@ export default function App() {
   const sections = useMemo(() => parseSections(source), [source])
 
   // Load the whole tree once signed in and a folder is chosen; auto-select the
-  // first script and its most recent version. Gated on auth so a restored
+  // first project and its most recent version. Gated on auth so a restored
   // folder can't trigger Drive calls before the token is ready (e.g. in a new
   // tab), which would fail with an auth error.
   useEffect(() => {
@@ -221,42 +255,42 @@ export default function App() {
     let active = true
     setTreeLoading(true)
     loadTree(folderId)
-      .then(({ scripts: list, versionsByScript: byScript }) => {
+      .then(({ projects: list, versionsByProject: byProject }) => {
         if (!active) return
-        setScripts(list)
-        setVersionsByScript(byScript)
-        setExpandedScripts(new Set(list.map((s) => s.id)))
+        setProjects(list)
+        setVersionsByProject(byProject)
+        setExpandedProjects(new Set(list.map((s) => s.id)))
 
-        // Prefer the last-opened script/version if it still exists; otherwise
-        // fall back to the first script's most recent version.
+        // Prefer the last-opened project/version if it still exists; otherwise
+        // fall back to the first project's most recent version.
         const first = list[0] ?? null
-        let scriptId = first?.id ?? null
+        let projectId = first?.id ?? null
         let versionId = first
-          ? (parseVersions(byScript[first.id] ?? [])[0]?.file.id ?? null)
+          ? (parseVersions(byProject[first.id] ?? [])[0]?.file.id ?? null)
           : null
 
         const saved = loadLastOpened()
         if (saved !== null && saved.folderId === folderId) {
-          const scriptExists = list.some((s) => s.id === saved.scriptId)
-          if (scriptExists) {
-            scriptId = saved.scriptId
-            const versions = byScript[saved.scriptId] ?? []
+          const projectExists = list.some((s) => s.id === saved.projectId)
+          if (projectExists) {
+            projectId = saved.projectId
+            const versions = byProject[saved.projectId] ?? []
             versionId = versions.some((f) => f.id === saved.versionId)
               ? saved.versionId
               : (parseVersions(versions)[0]?.file.id ?? null)
           }
         }
 
-        setSelectedScriptId(scriptId)
+        setSelectedProjectId(projectId)
         setSelectedVersionId(versionId)
       })
       .catch((err) => {
         if (!active) return
         console.error('[drive] load tree failed:', err)
         setError(String(err instanceof Error ? err.message : err))
-        setScripts([])
-        setVersionsByScript({})
-        setSelectedScriptId(null)
+        setProjects([])
+        setVersionsByProject({})
+        setSelectedProjectId(null)
         setSelectedVersionId(null)
       })
       .finally(() => {
@@ -273,20 +307,21 @@ export default function App() {
     saveTheme(theme)
   }, [theme])
 
-  // Name the browser tab after the script being edited, so multiple open tabs
+  // Name the browser tab after the project being edited, so multiple open tabs
   // are tellable apart; fall back to the app name when nothing is open.
-  const scriptName = selectedScript?.name ?? null
+  const projectName = selectedProject?.name ?? null
   useEffect(() => {
-    document.title = scriptName ? `${scriptName} — kunal's scripts` : "kunal's scripts"
-  }, [scriptName])
+    document.title = projectName ? `${projectName} — kunal's scripts` : "kunal's scripts"
+  }, [projectName])
 
   // Persist which panels are open as they change.
   useEffect(() => {
     layoutRef.current.showPreview = showPreview
     layoutRef.current.navCollapsed = navCollapsed
     layoutRef.current.showSections = showSections
+    layoutRef.current.showNotes = showNotes
     saveLayout(layoutRef.current)
-  }, [showPreview, navCollapsed, showSections])
+  }, [showPreview, navCollapsed, showSections, showNotes])
 
   // Entering mobile width, collapse the nav to its floating button so the
   // editor fills the screen; the drawer is a tap away.
@@ -299,18 +334,18 @@ export default function App() {
     currentVersionIdRef.current = selectedVersionId
   }, [selectedVersionId])
 
-  // Remember the currently-open script/version so a reload reopens to it.
+  // Remember the currently-open project/version so a reload reopens to it.
   const rememberOpen = () => {
-    if (folderId !== null && selectedScriptId !== null && selectedVersionId !== null) {
+    if (folderId !== null && selectedProjectId !== null && selectedVersionId !== null) {
       saveLastOpened({
         folderId,
-        scriptId: selectedScriptId,
+        projectId: selectedProjectId,
         versionId: selectedVersionId,
         scrollByVersion: scrollByVersionRef.current,
       })
     }
   }
-  useEffect(rememberOpen, [folderId, selectedScriptId, selectedVersionId])
+  useEffect(rememberOpen, [folderId, selectedProjectId, selectedVersionId])
 
   // ⌘/Ctrl+S saves the editor's current text to the open version.
   useEffect(() => {
@@ -338,11 +373,11 @@ export default function App() {
       return
     }
     // This version's content is already loaded in the editor. The effect also
-    // re-runs when `versionsByScript` changes (e.g. after saving a comment or
+    // re-runs when `versionsByProject` changes (e.g. after saving a comment or
     // creating a version) — reloading here would overwrite the editor with the
     // last-saved text and silently discard any unsaved edits, so bail out.
     if (selectedVersionId === sourceVersionIdRef.current) return
-    const file = Object.values(versionsByScript)
+    const file = Object.values(versionsByProject)
       .flat()
       .find((f) => f.id === selectedVersionId)
     if (file === undefined) return
@@ -379,17 +414,17 @@ export default function App() {
     return () => {
       active = false
     }
-  }, [selectedVersionId, versionsByScript])
+  }, [selectedVersionId, versionsByProject])
 
-  // Load the selected script's comments (a single comments.json for all its
+  // Load the selected project's comments (a single comments.json for all its
   // versions), and remember the file id for later writes.
   useEffect(() => {
-    if (selectedScriptId === null) {
+    if (selectedProjectId === null) {
       setComments([])
       commentsFileIdRef.current = null
       return
     }
-    const file = (versionsByScript[selectedScriptId] ?? []).find(isCommentsFile)
+    const file = (versionsByProject[selectedProjectId] ?? []).find(isCommentsFile)
     commentsFileIdRef.current = file?.id ?? null
     if (file === undefined) {
       setComments([])
@@ -407,29 +442,29 @@ export default function App() {
     return () => {
       active = false
     }
-  }, [selectedScriptId, versionsByScript])
+  }, [selectedProjectId, versionsByProject])
 
-  // Load the selected script's edit history (a single history.json for all its
-  // versions). Only re-reads when the script actually changes — a
-  // versionsByScript refresh (e.g. right after we create history.json) must not
+  // Load the selected project's edit history (a single history.json for all its
+  // versions). Only re-reads when the project actually changes — a
+  // versionsByProject refresh (e.g. right after we create history.json) must not
   // overwrite snapshots recorded in memory since the load.
   useEffect(() => {
-    if (selectedScriptId === null) {
+    if (selectedProjectId === null) {
       setHistory([])
       historyRef.current = []
-      historyScriptIdRef.current = null
+      historyProjectIdRef.current = null
       historyFileIdRef.current = null
-      loadedHistoryScriptRef.current = null
+      loadedHistoryProjectRef.current = null
       return
     }
-    if (loadedHistoryScriptRef.current === selectedScriptId) return
-    const file = (versionsByScript[selectedScriptId] ?? []).find(isHistoryFile)
-    historyScriptIdRef.current = selectedScriptId
+    if (loadedHistoryProjectRef.current === selectedProjectId) return
+    const file = (versionsByProject[selectedProjectId] ?? []).find(isHistoryFile)
+    historyProjectIdRef.current = selectedProjectId
     historyFileIdRef.current = file?.id ?? null
     if (file === undefined) {
       setHistory([])
       historyRef.current = []
-      loadedHistoryScriptRef.current = selectedScriptId
+      loadedHistoryProjectRef.current = selectedProjectId
       return
     }
     let active = true
@@ -439,27 +474,213 @@ export default function App() {
         const snaps = parseHistory(text)
         setHistory(snaps)
         historyRef.current = snaps
-        loadedHistoryScriptRef.current = selectedScriptId
+        loadedHistoryProjectRef.current = selectedProjectId
       })
       .catch((err) => {
         console.error('[history] read failed:', err)
         if (!active) return
         setHistory([])
         historyRef.current = []
-        loadedHistoryScriptRef.current = selectedScriptId
+        loadedHistoryProjectRef.current = selectedProjectId
       })
     return () => {
       active = false
     }
-  }, [selectedScriptId, versionsByScript])
+  }, [selectedProjectId, versionsByProject])
 
-  // Write the accumulated snapshots to the script's history.json (creating it
-  // the first time). Debounced and guarded so it only writes the script it was
+  // Load the selected project's notes (a single notes.json for all versions).
+  // Like history, only re-reads when the project actually changes, so a
+  // versionsByProject refresh (e.g. right after we create notes.json) doesn't
+  // clobber edits made in memory since the load.
+  useEffect(() => {
+    if (selectedProjectId === null) {
+      setNotes([])
+      notesRef.current = []
+      notesProjectIdRef.current = null
+      notesFileIdRef.current = null
+      loadedNotesProjectRef.current = null
+      return
+    }
+    if (loadedNotesProjectRef.current === selectedProjectId) return
+    const file = (versionsByProject[selectedProjectId] ?? []).find(isNotesFile)
+    notesProjectIdRef.current = selectedProjectId
+    notesFileIdRef.current = file?.id ?? null
+    if (file === undefined) {
+      setNotes([])
+      notesRef.current = []
+      loadedNotesProjectRef.current = selectedProjectId
+      return
+    }
+    let active = true
+    readFile(file)
+      .then((text) => {
+        if (!active) return
+        const parsed = parseNotes(text)
+        setNotes(parsed)
+        notesRef.current = parsed
+        loadedNotesProjectRef.current = selectedProjectId
+      })
+      .catch((err) => {
+        console.error('[notes] read failed:', err)
+        if (!active) return
+        setNotes([])
+        notesRef.current = []
+        loadedNotesProjectRef.current = selectedProjectId
+      })
+    return () => {
+      active = false
+    }
+  }, [selectedProjectId, versionsByProject])
+
+  // Write the current notes to the project's notes.json (creating it the first
+  // time). Debounced and guarded so it only writes the project it was scheduled
+  // for, and never blocks editing.
+  async function flushNotes(projectId: string) {
+    notesWriteTimer.current = 0
+    if (!notesDirtyRef.current) return
+    if (notesProjectIdRef.current !== projectId) return
+    notesDirtyRef.current = false
+    const json = serializeNotes(notesRef.current)
+    try {
+      const fileId = notesFileIdRef.current
+      if (fileId !== null) {
+        await updateFileContent(fileId, json)
+      } else {
+        const created = await createFile(projectId, NOTES_FILENAME, json)
+        notesFileIdRef.current = created.id
+        const refreshed = await listFiles(projectId)
+        setVersionsByProject((prev) => ({ ...prev, [projectId]: refreshed }))
+      }
+    } catch (err) {
+      console.error('[notes] write failed:', err)
+      setError(`Save note failed: ${err instanceof Error ? err.message : err}`)
+      notesDirtyRef.current = true // retry on the next scheduled flush
+    }
+  }
+
+  // Apply a notes mutation: update state + ref immediately (so the UI is live)
+  // and schedule a debounced write to Drive.
+  function mutateNotes(next: Note[]) {
+    const projectId = notesProjectIdRef.current
+    if (projectId === null) return
+    notesRef.current = next
+    setNotes(next)
+    notesDirtyRef.current = true
+    if (notesWriteTimer.current !== 0) clearTimeout(notesWriteTimer.current)
+    notesWriteTimer.current = window.setTimeout(
+      () => void flushNotes(projectId),
+      NOTES_WRITE_DEBOUNCE_MS,
+    )
+  }
+
+  // Create a blank note and return it (the panel opens it immediately).
+  function addNote(): Note {
+    const note = makeNote(Date.now())
+    mutateNotes([...notesRef.current, note])
+    return note
+  }
+
+  // Edit a note's title and/or blocks, stamping the modified time.
+  function updateNote(id: string, patch: Partial<Pick<Note, 'title' | 'blocks'>>) {
+    const next = notesRef.current.map((n) =>
+      n.id === id ? { ...n, ...patch, modifiedAt: Date.now() } : n,
+    )
+    mutateNotes(next)
+  }
+
+  // Delete a note and trash the Drive files backing any inline media it held.
+  function deleteNote(id: string) {
+    const note = notesRef.current.find((n) => n.id === id)
+    mutateNotes(notesRef.current.filter((n) => n.id !== id))
+    const media = note ? mediaBlocks(note) : []
+    if (media.length > 0) {
+      void run('Delete note media', async () => {
+        await Promise.all(media.map((m) => trashFile(m.fileId)))
+      })
+    }
+  }
+
+  // Upload image/video files to the project folder and return media blocks for
+  // them. Each file becomes its own Drive file (prefixed so it's excluded from
+  // the version list); the block just references it by id. The caller decides
+  // where to splice the blocks into the note (so media lands at the caret).
+  async function uploadNoteMedia(files: File[]): Promise<MediaBlock[]> {
+    const projectId = notesProjectIdRef.current
+    if (projectId === null || files.length === 0) return []
+    const now = Date.now()
+    const blocks: MediaBlock[] = []
+    try {
+      for (const file of files) {
+        const type = file.type.startsWith('video/') ? 'video' : 'image'
+        const ext = file.name.includes('.')
+          ? file.name.slice(file.name.lastIndexOf('.'))
+          : ''
+        const assetName = `${NOTE_ASSET_PREFIX}${makeId(now)}${ext}`
+        const bytes = new Uint8Array(await file.arrayBuffer())
+        const created = await createBinaryFile(
+          projectId,
+          assetName,
+          bytes,
+          file.type || 'application/octet-stream',
+        )
+        blocks.push(makeMediaBlock(now, type, created.id, file.type, file.name))
+      }
+    } catch (err) {
+      console.error('[notes] media upload failed:', err)
+      setError(`Add media failed: ${err instanceof Error ? err.message : err}`)
+    }
+    return blocks
+  }
+
+  // Remove one inline media block from a note and trash its Drive file.
+  function deleteNoteMedia(noteId: string, blockId: string) {
+    const note = notesRef.current.find((n) => n.id === noteId)
+    const block = note?.blocks.find((b) => b.id === blockId)
+    if (note === undefined || block === undefined || block.type === 'text') return
+    const fileId = block.fileId
+    const next = notesRef.current.map((n) =>
+      n.id === noteId
+        ? {
+            ...n,
+            // Normalize so text on either side of the removed media re-merges.
+            blocks: normalizeBlocks(
+              n.blocks.filter((b) => b.id !== blockId),
+              Date.now(),
+            ),
+            modifiedAt: Date.now(),
+          }
+        : n,
+    )
+    mutateNotes(next)
+    void run('Delete media', () => trashFile(fileId))
+  }
+
+  // Load a note media file's bytes as an object URL for inline display.
+  const loadNoteMedia = useCallback(async (fileId: string): Promise<string> => {
+    const blob = await readFileBlob(fileId)
+    return URL.createObjectURL(blob)
+  }, [])
+
+  // History and Notes are both right-side drawers, so opening one closes the
+  // other.
+  const toggleHistory = () =>
+    setShowHistory((v) => {
+      if (!v) setShowNotes(false)
+      return !v
+    })
+  const toggleNotes = () =>
+    setShowNotes((v) => {
+      if (!v) setShowHistory(false)
+      return !v
+    })
+
+  // Write the accumulated snapshots to the project's history.json (creating it
+  // the first time). Debounced and guarded so it only writes the project it was
   // scheduled for, and never blocks editing.
-  async function flushHistory(scriptId: string) {
+  async function flushHistory(projectId: string) {
     historyWriteTimer.current = 0
     if (!historyDirtyRef.current) return
-    if (historyScriptIdRef.current !== scriptId) return
+    if (historyProjectIdRef.current !== projectId) return
     historyDirtyRef.current = false
     const json = serializeHistory(historyRef.current)
     try {
@@ -467,10 +688,10 @@ export default function App() {
       if (fileId !== null) {
         await updateFileContent(fileId, json)
       } else {
-        const created = await createFile(scriptId, HISTORY_FILENAME, json)
+        const created = await createFile(projectId, HISTORY_FILENAME, json)
         historyFileIdRef.current = created.id
-        const refreshed = await listFiles(scriptId)
-        setVersionsByScript((prev) => ({ ...prev, [scriptId]: refreshed }))
+        const refreshed = await listFiles(projectId)
+        setVersionsByProject((prev) => ({ ...prev, [projectId]: refreshed }))
       }
     } catch (err) {
       console.error('[history] write failed:', err)
@@ -481,8 +702,8 @@ export default function App() {
   // Record a snapshot of a version's text into the in-memory history and
   // schedule a debounced write. No-ops (dedup/coalesce) don't schedule a write.
   function recordSnapshot(versionId: string, text: string, kind: SnapshotKind) {
-    const scriptId = historyScriptIdRef.current
-    if (scriptId === null) return
+    const projectId = historyProjectIdRef.current
+    if (projectId === null) return
     const next = appendSnapshot(
       historyRef.current,
       makeSnapshot(versionId, text, kind, Date.now()),
@@ -495,7 +716,7 @@ export default function App() {
       clearTimeout(historyWriteTimer.current)
     }
     historyWriteTimer.current = window.setTimeout(
-      () => void flushHistory(scriptId),
+      () => void flushHistory(projectId),
       HISTORY_WRITE_DEBOUNCE_MS,
     )
   }
@@ -524,41 +745,41 @@ export default function App() {
     })
   }
 
-  // Write the comments array to the script's comments.json (creating it the
+  // Write the comments array to the project's comments.json (creating it the
   // first time), then apply it to state.
-  async function persistComments(scriptId: string, next: Comment[]) {
+  async function persistComments(projectId: string, next: Comment[]) {
     setComments(next)
     const json = serializeComments(next)
     const fileId = commentsFileIdRef.current
     if (fileId !== null) {
       await updateFileContent(fileId, json)
     } else {
-      const created = await createFile(scriptId, COMMENTS_FILENAME, json)
+      const created = await createFile(projectId, COMMENTS_FILENAME, json)
       commentsFileIdRef.current = created.id
-      const refreshed = await listFiles(scriptId)
-      setVersionsByScript((prev) => ({ ...prev, [scriptId]: refreshed }))
+      const refreshed = await listFiles(projectId)
+      setVersionsByProject((prev) => ({ ...prev, [projectId]: refreshed }))
     }
   }
 
   function addComment(anchor: CommentAnchor, text: string) {
-    if (selectedScriptId === null) return
-    const scriptId = selectedScriptId
+    if (selectedProjectId === null) return
+    const projectId = selectedProjectId
     const next = [...comments, makeComment(anchor, null, text, Date.now())]
-    void run('Save comment', () => persistComments(scriptId, next))
+    void run('Save comment', () => persistComments(projectId, next))
   }
 
   function editComment(id: string, text: string) {
-    if (selectedScriptId === null) return
-    const scriptId = selectedScriptId
+    if (selectedProjectId === null) return
+    const projectId = selectedProjectId
     const next = comments.map((c) => (c.id === id ? { ...c, text } : c))
-    void run('Edit comment', () => persistComments(scriptId, next))
+    void run('Edit comment', () => persistComments(projectId, next))
   }
 
   function deleteComment(id: string) {
-    if (selectedScriptId === null) return
-    const scriptId = selectedScriptId
+    if (selectedProjectId === null) return
+    const projectId = selectedProjectId
     const next = comments.filter((c) => c.id !== id)
-    void run('Delete comment', () => persistComments(scriptId, next))
+    void run('Delete comment', () => persistComments(projectId, next))
   }
 
   // Background auto-save: on each edit, save immediately once enough changes
@@ -641,65 +862,74 @@ export default function App() {
   // the new one loads. Only clears on an actual change of version — re-selecting
   // the same version must not strand the editor (the load effect would skip the
   // already-loaded version and never restore content).
-  function openVersion(scriptId: string, versionId: string | null) {
+  function openVersion(projectId: string, versionId: string | null) {
     if (versionId !== selectedVersionId) {
       void persist() // flush any unsaved edits to the outgoing version first
       setContent(null)
       contentRef.current = null
     }
-    // Leaving a script: write out any pending history for it now, before the
-    // load effect repoints history state at the incoming script.
-    if (scriptId !== selectedScriptId && historyScriptIdRef.current !== null) {
-      if (historyWriteTimer.current !== 0) {
-        clearTimeout(historyWriteTimer.current)
-        historyWriteTimer.current = 0
+    // Leaving a project: write out any pending history and notes for it now,
+    // before the load effects repoint that state at the incoming project.
+    if (projectId !== selectedProjectId) {
+      if (historyProjectIdRef.current !== null) {
+        if (historyWriteTimer.current !== 0) {
+          clearTimeout(historyWriteTimer.current)
+          historyWriteTimer.current = 0
+        }
+        void flushHistory(historyProjectIdRef.current)
       }
-      void flushHistory(historyScriptIdRef.current)
+      if (notesProjectIdRef.current !== null) {
+        if (notesWriteTimer.current !== 0) {
+          clearTimeout(notesWriteTimer.current)
+          notesWriteTimer.current = 0
+        }
+        void flushNotes(notesProjectIdRef.current)
+      }
     }
-    setSelectedScriptId(scriptId)
+    setSelectedProjectId(projectId)
     setSelectedVersionId(versionId)
     if (isMobile) setNavCollapsed(true) // close the drawer, reveal the editor
   }
 
-  function selectScript(script: DriveFile) {
-    setExpandedScripts((prev) => new Set(prev).add(script.id))
-    const latest = parseVersions(versionsByScript[script.id] ?? [])[0]
-    openVersion(script.id, latest?.file.id ?? null)
+  function selectProject(project: DriveFile) {
+    setExpandedProjects((prev) => new Set(prev).add(project.id))
+    const latest = parseVersions(versionsByProject[project.id] ?? [])[0]
+    openVersion(project.id, latest?.file.id ?? null)
   }
 
-  function selectVersion(scriptId: string, versionId: string) {
-    openVersion(scriptId, versionId)
+  function selectVersion(projectId: string, versionId: string) {
+    openVersion(projectId, versionId)
   }
 
-  function toggleExpand(scriptId: string) {
-    setExpandedScripts((prev) => {
+  function toggleExpand(projectId: string) {
+    setExpandedProjects((prev) => {
       const next = new Set(prev)
-      if (next.has(scriptId)) next.delete(scriptId)
-      else next.add(scriptId)
+      if (next.has(projectId)) next.delete(projectId)
+      else next.add(projectId)
       return next
     })
   }
 
-  function newScript() {
+  function newProject() {
     if (folderId === null) return
-    const name = window.prompt('New script name:')?.trim()
+    const name = window.prompt('New project name:')?.trim()
     if (!name) return
-    void run('Create script', async () => {
+    void run('Create project', async () => {
       const created = await createFolder(folderId, name)
       await createFile(created.id, versionFileName(name, 1), '')
-      const { scripts: list, versionsByScript: byScript } = await loadTree(folderId)
-      setScripts(list)
-      setVersionsByScript(byScript)
-      setExpandedScripts((prev) => new Set(prev).add(created.id))
-      setSelectedScriptId(created.id)
+      const { projects: list, versionsByProject: byProject } = await loadTree(folderId)
+      setProjects(list)
+      setVersionsByProject(byProject)
+      setExpandedProjects((prev) => new Set(prev).add(created.id))
+      setSelectedProjectId(created.id)
       setSelectedVersionId(
-        parseVersions(byScript[created.id] ?? [])[0]?.file.id ?? null,
+        parseVersions(byProject[created.id] ?? [])[0]?.file.id ?? null,
       )
     })
   }
 
-  function deleteVersion(scriptId: string, versionId: string) {
-    const file = (versionsByScript[scriptId] ?? []).find(
+  function deleteVersion(projectId: string, versionId: string) {
+    const file = (versionsByProject[projectId] ?? []).find(
       (f) => f.id === versionId,
     )
     const label = file?.name ?? 'this version'
@@ -712,8 +942,8 @@ export default function App() {
     }
     void run('Delete version', async () => {
       await trashFile(versionId)
-      const refreshed = await listFiles(scriptId)
-      setVersionsByScript((prev) => ({ ...prev, [scriptId]: refreshed }))
+      const refreshed = await listFiles(projectId)
+      setVersionsByProject((prev) => ({ ...prev, [projectId]: refreshed }))
       if (selectedVersionId === versionId) {
         setSelectedVersionId(parseVersions(refreshed)[0]?.file.id ?? null)
       }
@@ -722,30 +952,30 @@ export default function App() {
 
   // Snapshot the current text as a new version, preserving existing ones.
   function newVersion() {
-    if (selectedScriptId === null) return
-    const scriptId = selectedScriptId
-    const scriptName =
-      scripts.find((s) => s.id === scriptId)?.name ?? 'script'
+    if (selectedProjectId === null) return
+    const projectId = selectedProjectId
+    const projectName =
+      projects.find((s) => s.id === projectId)?.name ?? 'project'
     void run('New version', async () => {
-      const files = versionsByScript[scriptId] ?? []
+      const files = versionsByProject[projectId] ?? []
       const created = await createFile(
-        scriptId,
-        versionFileName(scriptName, nextVersionNumber(files)),
+        projectId,
+        versionFileName(projectName, nextVersionNumber(files)),
         source,
       )
-      const refreshed = await listFiles(scriptId)
-      setVersionsByScript((prev) => ({ ...prev, [scriptId]: refreshed }))
+      const refreshed = await listFiles(projectId)
+      setVersionsByProject((prev) => ({ ...prev, [projectId]: refreshed }))
       setSelectedVersionId(created.id)
     })
   }
 
   // Render the current preview to a PDF and store it beside the versions,
-  // named to match the current version file (e.g. Script_v3.fountain →
-  // Script_v3.pdf). Overwrites an existing PDF for that version.
+  // named to match the current version file (e.g. Project_v3.fountain →
+  // Project_v3.pdf). Overwrites an existing PDF for that version.
   function exportPdf() {
-    if (selectedScriptId === null || selectedVersionId === null) return
-    const scriptId = selectedScriptId
-    const files = versionsByScript[scriptId] ?? []
+    if (selectedProjectId === null || selectedVersionId === null) return
+    const projectId = selectedProjectId
+    const files = versionsByProject[projectId] ?? []
     const versionFile = files.find((f) => f.id === selectedVersionId)
     if (versionFile === undefined) return
     const pdfName = versionFile.name.replace(/\.fountain$/i, '') + '.pdf'
@@ -755,10 +985,10 @@ export default function App() {
       if (existing !== undefined) {
         await updateBinaryFileContent(existing.id, bytes, 'application/pdf')
       } else {
-        await createBinaryFile(scriptId, pdfName, bytes, 'application/pdf')
+        await createBinaryFile(projectId, pdfName, bytes, 'application/pdf')
       }
-      const refreshed = await listFiles(scriptId)
-      setVersionsByScript((prev) => ({ ...prev, [scriptId]: refreshed }))
+      const refreshed = await listFiles(projectId)
+      setVersionsByProject((prev) => ({ ...prev, [projectId]: refreshed }))
     })
   }
 
@@ -800,10 +1030,10 @@ export default function App() {
     <div className="workspace">
       <FileNav
         folderName={folder.name}
-        scripts={scripts}
-        versionsByScript={versionsByScript}
-        expandedScripts={expandedScripts}
-        selectedScriptId={selectedScriptId}
+        projects={projects}
+        versionsByProject={versionsByProject}
+        expandedProjects={expandedProjects}
+        selectedProjectId={selectedProjectId}
         selectedVersionId={selectedVersionId}
         loading={treeLoading}
         busy={busy}
@@ -814,10 +1044,10 @@ export default function App() {
           setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
         }
         onToggleExpand={toggleExpand}
-        onSelectScript={selectScript}
+        onSelectProject={selectProject}
         onSelectVersion={selectVersion}
         onDeleteVersion={deleteVersion}
-        onNewScript={newScript}
+        onNewProject={newProject}
         onChangeFolder={() => choose()}
       />
       <div className="workspace__main">
@@ -834,18 +1064,18 @@ export default function App() {
             </button>
           </div>
         )}
-        {selectedScriptId === null ? (
+        {selectedProjectId === null ? (
           <>
             {mobileBar}
             <div className="workspace__empty">
-              {treeLoading ? 'Loading…' : 'No scripts yet. Create one.'}
+              {treeLoading ? 'Loading…' : 'No projects yet. Create one.'}
             </div>
           </>
         ) : selectedVersionId === null ? (
           <>
             {mobileBar}
             <div className="workspace__empty">
-              <p>This script has no versions.</p>
+              <p>This project has no versions.</p>
               <button
                 type="button"
                 className="workspace__empty-action"
@@ -864,7 +1094,7 @@ export default function App() {
         ) : (
           <>
             <VersionBar
-              scriptName={selectedScript?.name ?? ''}
+              projectName={selectedProject?.name ?? ''}
               versions={versions}
               selectedVersionId={selectedVersionId}
               busy={busy}
@@ -872,12 +1102,14 @@ export default function App() {
               saving={saveState === 'saving'}
               savedAt={savedAt}
               onSelectVersion={(id) =>
-                selectedScriptId !== null && selectVersion(selectedScriptId, id)
+                selectedProjectId !== null && selectVersion(selectedProjectId, id)
               }
               onSave={() => void persist()}
               onNewVersion={newVersion}
               onExportPdf={exportPdf}
               onToggleNav={() => setNavCollapsed(false)}
+              showNotes={showNotes}
+              onToggleNotes={toggleNotes}
             />
             <div className="workspace__editor">
               {(() => {
@@ -916,8 +1148,22 @@ export default function App() {
                         label: 'History',
                         title: 'View and restore recent edits',
                         active: showHistory,
-                        onToggle: () => setShowHistory((v) => !v),
+                        onToggle: toggleHistory,
                       },
+                      // On mobile the Notes toggle lives in the top VersionBar
+                      // instead (and the panel opens full-screen).
+                      ...(isMobile
+                        ? []
+                        : [
+                            {
+                              key: 'notes',
+                              glyph: '🗒️',
+                              label: 'Notes',
+                              title: 'Project notes',
+                              active: showNotes,
+                              onToggle: toggleNotes,
+                            },
+                          ]),
                     ]}
                   />
                 )
@@ -984,6 +1230,19 @@ export default function App() {
                   currentText={source}
                   onRestore={restoreSnapshot}
                   onClose={() => setShowHistory(false)}
+                  busy={busy}
+                />
+              )}
+              {showNotes && (
+                <NotesPanel
+                  notes={notes}
+                  onCreate={addNote}
+                  onChangeNote={updateNote}
+                  onDeleteNote={deleteNote}
+                  onUploadMedia={uploadNoteMedia}
+                  onDeleteMedia={deleteNoteMedia}
+                  loadMedia={loadNoteMedia}
+                  onClose={() => setShowNotes(false)}
                   busy={busy}
                 />
               )}

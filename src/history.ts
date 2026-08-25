@@ -1,5 +1,5 @@
-// Edit history. Like comments, all edit-history snapshots for a script — across
-// every version — live in a single JSON file (HISTORY_FILENAME) in the script's
+// Edit history. Like comments, all edit-history snapshots for a project — across
+// every version — live in a single JSON file (HISTORY_FILENAME) in the project's
 // Drive folder. That file is data, never a screenplay version: it is excluded
 // from the version list and is never opened in the editor (see drive/versions.ts).
 //

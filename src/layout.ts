@@ -18,6 +18,8 @@ export interface LayoutPrefs {
   insightsGroups: InsightsGroups
   /** Whether section ranges are rendered over the preview pages. */
   showSections: boolean
+  /** Whether the project notes drawer is open. */
+  showNotes: boolean
 }
 
 /** Per-group visibility for the Characters & Locations panel. */
@@ -40,6 +42,7 @@ const DEFAULTS: LayoutPrefs = {
   insightsCollapsed: false,
   insightsGroups: { ...DEFAULT_GROUPS },
   showSections: false,
+  showNotes: false,
 }
 
 export function loadLayout(): LayoutPrefs {
@@ -82,6 +85,10 @@ export function loadLayout(): LayoutPrefs {
           typeof parsed.showSections === 'boolean'
             ? parsed.showSections
             : DEFAULTS.showSections,
+        showNotes:
+          typeof parsed.showNotes === 'boolean'
+            ? parsed.showNotes
+            : DEFAULTS.showNotes,
       }
     }
   } catch {

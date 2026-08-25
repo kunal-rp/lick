@@ -3,7 +3,7 @@ import type { Version } from '../drive/versions'
 import './VersionBar.css'
 
 interface VersionBarProps {
-  scriptName: string
+  projectName: string
   versions: Version[]
   selectedVersionId: string | null
   busy: boolean
@@ -17,11 +17,15 @@ interface VersionBarProps {
   onExportPdf: () => void
   /** Open the project drawer (mobile only; the button is hidden on desktop). */
   onToggleNav: () => void
+  /** Whether the notes panel is open (drives the mobile Notes toggle state). */
+  showNotes: boolean
+  /** Toggle the notes panel (mobile only; the button is hidden on desktop). */
+  onToggleNotes: () => void
 }
 
-/** Top bar over the editor: current script, version selector, save/new version. */
+/** Top bar over the editor: current project, version selector, save/new version. */
 export function VersionBar({
-  scriptName,
+  projectName,
   versions,
   selectedVersionId,
   busy,
@@ -33,6 +37,8 @@ export function VersionBar({
   onNewVersion,
   onExportPdf,
   onToggleNav,
+  showNotes,
+  onToggleNotes,
 }: VersionBarProps) {
   // Mobile only: an options menu collapsing the less-frequent actions
   // (Export PDF, New version) behind a single button in the top bar.
@@ -81,8 +87,8 @@ export function VersionBar({
         ☰
       </button>
 
-      <span className="verbar__script" title={scriptName}>
-        {scriptName}
+      <span className="verbar__project" title={projectName}>
+        {projectName}
       </span>
 
       <label className="verbar__version">
@@ -135,6 +141,21 @@ export function VersionBar({
         title="Snapshot the current text as a new version"
       >
         New version
+      </button>
+
+      {/* Mobile only: the Notes toggle (on desktop it lives in the editor
+          toolbar). Opens the notes panel full-screen. */}
+      <button
+        type="button"
+        className={`verbar__btn verbar__notes${
+          showNotes ? ' verbar__notes--active' : ''
+        }`}
+        onClick={onToggleNotes}
+        aria-pressed={showNotes}
+        aria-label="Project notes"
+        title="Project notes"
+      >
+        🗒️
       </button>
 
       {/* Mobile only: Export PDF and New version collapse into this menu. */}
