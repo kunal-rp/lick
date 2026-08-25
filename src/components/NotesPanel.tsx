@@ -16,25 +16,23 @@ import {
   INSERT_UNORDERED_LIST_COMMAND,
   INSERT_CHECK_LIST_COMMAND,
 } from '@lexical/list'
-import {
-  $convertFromMarkdownString,
-  $convertToMarkdownString,
-  CHECK_LIST,
-  UNORDERED_LIST,
-} from '@lexical/markdown'
+import { $convertFromMarkdownString, CHECK_LIST, UNORDERED_LIST } from '@lexical/markdown'
 import {
   type MediaBlock,
   type Note,
+  isSerializedState,
   makeTextBlock,
   noteSnippet,
   normalizeBlocks,
   sortedNotes,
+  textFromBlock,
 } from '../notes'
 import './NotesPanel.css'
 
 // The list vocabulary a note supports — checklists ("- [ ] ") and bullets
-// ("- "), auto-detected as you type and round-tripped as Markdown. CHECK_LIST
-// is first so "- [ ] " matches it, not the plain bullet transformer.
+// ("- "), auto-detected as you type. CHECK_LIST is first so "- [ ] " matches it
+// rather than the plain bullet transformer. (Used for typing shortcuts and for
+// seeding older Markdown-stored notes; the body itself is stored as JSON.)
 const NOTE_TRANSFORMERS = [CHECK_LIST, UNORDERED_LIST]
 
 // Lexical theme → CSS class names for the note editor (see NotesPanel.css).
@@ -137,7 +135,7 @@ function BulletIcon() {
 function noteText(note: Note): string {
   return note.blocks
     .filter((b) => b.type === 'text')
-    .map((b) => (b as { text: string }).text)
+    .map((b) => textFromBlock((b as { text: string }).text))
     .join('\n')
 }
 
@@ -615,19 +613,23 @@ function NoteTextEditor({
     namespace: 'note-editor',
     theme: NOTE_EDITOR_THEME,
     nodes: [ListNode, ListItemNode],
-    editorState: () => $convertFromMarkdownString(value, NOTE_TRANSFORMERS),
+    // Seed from the stored Lexical state (JSON) when present; older notes hold
+    // Markdown/plain text, which we import once and re-save as JSON on edit.
+    editorState: isSerializedState(value)
+      ? value
+      : () => $convertFromMarkdownString(value, NOTE_TRANSFORMERS),
     onError: (error: Error) => console.error('[note-editor]', error),
   }
 
   const handleChange = (state: EditorState) => {
-    state.read(() => {
-      const markdown = $convertToMarkdownString(NOTE_TRANSFORMERS)
-      if (!seededRef.current) {
-        seededRef.current = true
-        return
-      }
-      onChange(markdown)
-    })
+    // Serialize to JSON so blank lines, bullets, and checklists persist exactly
+    // (Markdown collapses empty paragraphs). Skip the initial seed callback so
+    // opening a note isn't recorded as an edit.
+    if (!seededRef.current) {
+      seededRef.current = true
+      return
+    }
+    onChange(JSON.stringify(state.toJSON()))
   }
 
   return (

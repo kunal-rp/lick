@@ -89,33 +89,14 @@ export function makeNote(now: number): Note {
 }
 
 /**
- * Collapse a block list to the canonical shape used by the note view: runs of
- * consecutive text blocks merge into a single text block (so the body reads as
- * one continuous writing surface, not several stacked boxes), and a trailing
- * empty text block is kept only when needed as a place to type below media.
- * A merged block gets a fresh id so the rich-text editor bound to it remounts
- * and reseeds from the merged content (it is otherwise uncontrolled).
+ * Ensure the block list has the canonical shape the note view needs: at least
+ * one block, and a text block at the end so there's always somewhere to type
+ * below trailing media. Text blocks are NOT merged — each holds a Lexical
+ * editor state (JSON) that can't be concatenated as strings.
  */
 export function normalizeBlocks(blocks: NoteBlock[], now: number): NoteBlock[] {
-  const out: NoteBlock[] = []
-  for (const b of blocks) {
-    const prev = out[out.length - 1]
-    if (b.type === 'text' && prev !== undefined && prev.type === 'text') {
-      // Join non-empty parts with a newline; an empty side contributes nothing
-      // (so a stray empty block doesn't add blank lines).
-      const merged =
-        prev.text === ''
-          ? b.text
-          : b.text === ''
-            ? prev.text
-            : `${prev.text}\n${b.text}`
-      out[out.length - 1] = { ...prev, id: makeId(now), text: merged }
-    } else {
-      out.push(b)
-    }
-  }
+  const out = [...blocks]
   if (out.length === 0) out.push(makeTextBlock(now))
-  // Guarantee a text block to type into below any trailing media.
   if (out[out.length - 1].type !== 'text') out.push(makeTextBlock(now))
   return out
 }
@@ -125,18 +106,65 @@ export function mediaBlocks(note: Note): MediaBlock[] {
   return note.blocks.filter((b): b is MediaBlock => b.type !== 'text')
 }
 
-// Strip a leading list/checklist marker ("- ", "* ", "- [ ] ", "- [x] ") so the
-// list preview reads as its text, not its Markdown source.
+/**
+ * A text block's body is stored as a Lexical serialized editor state (JSON) so
+ * blank lines, bullets, and checklists round-trip losslessly. Older notes may
+ * still hold plain text or Markdown; this detects the JSON form.
+ */
+export function isSerializedState(text: string): boolean {
+  if (text === '' || text[0] !== '{') return false
+  try {
+    const o = JSON.parse(text) as { root?: unknown }
+    return o !== null && typeof o === 'object' && 'root' in o
+  } catch {
+    return false
+  }
+}
+
+// Strip a leading list/checklist marker ("- ", "* ", "- [ ] ", "- [x] ") from a
+// legacy (Markdown/plain) line so the preview reads as text, not source.
 function stripListMarker(line: string): string {
   return line.replace(/^\s*(?:[-*+]\s+)?(?:\[[ xX]?\]\s+)?/, '')
+}
+
+// Recursively collect the visible text of a serialized-state node.
+function nodeText(node: unknown): string {
+  const n = node as { type?: string; text?: unknown; children?: unknown[] }
+  if (n.type === 'text' && typeof n.text === 'string') return n.text
+  if (Array.isArray(n.children)) return n.children.map(nodeText).join('')
+  return ''
+}
+
+/** The plain text of a text block's body (handles JSON and legacy strings). */
+export function textFromBlock(text: string): string {
+  if (!isSerializedState(text)) {
+    // Legacy Markdown/plain: strip list markers line by line.
+    return text
+      .split('\n')
+      .map(stripListMarker)
+      .join('\n')
+  }
+  try {
+    const root = (JSON.parse(text) as { root?: { children?: unknown[] } }).root
+    const lines: string[] = []
+    const push = (node: unknown) => lines.push(nodeText(node))
+    for (const child of root?.children ?? []) {
+      const c = child as { type?: string; children?: unknown[] }
+      if (c.type === 'list' && Array.isArray(c.children)) c.children.forEach(push)
+      else push(child)
+    }
+    return lines.join('\n')
+  } catch {
+    return ''
+  }
 }
 
 /** A short preview of a note's body for the list: first text, else media hint. */
 export function noteSnippet(note: Note): string {
   for (const block of note.blocks) {
     if (block.type === 'text') {
-      for (const line of block.text.split('\n')) {
-        const trimmed = stripListMarker(line).trim()
+      for (const line of textFromBlock(block.text).split('\n')) {
+        const trimmed = line.trim()
         if (trimmed.length > 0) return trimmed
       }
     }
