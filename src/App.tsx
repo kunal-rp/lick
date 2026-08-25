@@ -600,15 +600,16 @@ export default function App() {
     }
   }
 
-  // Upload image/video files and append them as inline blocks to a note. Each
-  // file becomes its own Drive file in the project folder (prefixed so it's
-  // excluded from the version list); the block just references it by id.
-  async function addNoteMedia(noteId: string, files: File[]) {
+  // Upload image/video files to the project folder and return media blocks for
+  // them. Each file becomes its own Drive file (prefixed so it's excluded from
+  // the version list); the block just references it by id. The caller decides
+  // where to splice the blocks into the note (so media lands at the caret).
+  async function uploadNoteMedia(files: File[]): Promise<MediaBlock[]> {
     const projectId = notesProjectIdRef.current
-    if (projectId === null || files.length === 0) return
-    await run('Add media', async () => {
-      const now = Date.now()
-      const newBlocks: MediaBlock[] = []
+    if (projectId === null || files.length === 0) return []
+    const now = Date.now()
+    const blocks: MediaBlock[] = []
+    try {
       for (const file of files) {
         const type = file.type.startsWith('video/') ? 'video' : 'image'
         const ext = file.name.includes('.')
@@ -622,19 +623,13 @@ export default function App() {
           bytes,
           file.type || 'application/octet-stream',
         )
-        newBlocks.push(
-          makeMediaBlock(now, type, created.id, file.type, file.name),
-        )
+        blocks.push(makeMediaBlock(now, type, created.id, file.type, file.name))
       }
-      const next = notesRef.current.map((n) => {
-        if (n.id !== noteId) return n
-        // Normalize so text runs stay merged and a trailing text block exists
-        // to type below the new media.
-        const blocks = normalizeBlocks([...n.blocks, ...newBlocks], Date.now())
-        return { ...n, blocks, modifiedAt: Date.now() }
-      })
-      mutateNotes(next)
-    })
+    } catch (err) {
+      console.error('[notes] media upload failed:', err)
+      setError(`Add media failed: ${err instanceof Error ? err.message : err}`)
+    }
+    return blocks
   }
 
   // Remove one inline media block from a note and trash its Drive file.
@@ -1244,7 +1239,7 @@ export default function App() {
                   onCreate={addNote}
                   onChangeNote={updateNote}
                   onDeleteNote={deleteNote}
-                  onAddMedia={addNoteMedia}
+                  onUploadMedia={uploadNoteMedia}
                   onDeleteMedia={deleteNoteMedia}
                   loadMedia={loadNoteMedia}
                   onClose={() => setShowNotes(false)}

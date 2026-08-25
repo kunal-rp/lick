@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   type MediaBlock,
   type Note,
+  makeTextBlock,
   noteSnippet,
   normalizeBlocks,
   sortedNotes,
@@ -16,8 +17,8 @@ interface NotesPanelProps {
   /** Persist an edit to a note's title/blocks. */
   onChangeNote: (id: string, patch: Partial<Pick<Note, 'title' | 'blocks'>>) => void
   onDeleteNote: (id: string) => void
-  /** Upload image/video files and append them as inline blocks to a note. */
-  onAddMedia: (noteId: string, files: File[]) => Promise<void>
+  /** Upload image/video files to Drive and return blocks to splice into a note. */
+  onUploadMedia: (files: File[]) => Promise<MediaBlock[]>
   /** Remove one inline media block from a note (and trash its file). */
   onDeleteMedia: (noteId: string, blockId: string) => void
   /** Fetch a media file's bytes as an object URL for display. */
@@ -122,7 +123,7 @@ export function NotesPanel({
   onCreate,
   onChangeNote,
   onDeleteNote,
-  onAddMedia,
+  onUploadMedia,
   onDeleteMedia,
   loadMedia,
   onClose,
@@ -151,7 +152,7 @@ export function NotesPanel({
           onDeleteNote(openNote.id)
           setOpenId(null)
         }}
-        onAddMedia={onAddMedia}
+        onUploadMedia={onUploadMedia}
         onDeleteMedia={onDeleteMedia}
         loadMedia={loadMedia}
         busy={busy}
@@ -297,7 +298,7 @@ function NoteView({
   onBack,
   onChangeNote,
   onDelete,
-  onAddMedia,
+  onUploadMedia,
   onDeleteMedia,
   loadMedia,
   busy,
@@ -306,7 +307,7 @@ function NoteView({
   onBack: () => void
   onChangeNote: (id: string, patch: Partial<Pick<Note, 'title' | 'blocks'>>) => void
   onDelete: () => void
-  onAddMedia: (noteId: string, files: File[]) => Promise<void>
+  onUploadMedia: (files: File[]) => Promise<MediaBlock[]>
   onDeleteMedia: (noteId: string, blockId: string) => void
   loadMedia: (fileId: string) => Promise<string>
   busy: boolean
@@ -315,6 +316,11 @@ function NoteView({
   const titleRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const now = useMemo(() => Date.now(), [note.modifiedAt])
+  // The text block + caret offset last touched, so inserted media lands inline
+  // where the writer is, not dumped at the end.
+  const caretRef = useRef<{ blockId: string; pos: number } | null>(null)
+  // A block to focus on the next render (the text right after inserted media).
+  const [focusBlockId, setFocusBlockId] = useState<string | null>(null)
 
   // On open, collapse any stray/legacy block shape (e.g. an old note whose text
   // was split across separate blocks) to the canonical one — before the user
@@ -347,12 +353,44 @@ function NoteView({
     if (fileList === null || fileList.length === 0) return
     setUploading(true)
     try {
-      await onAddMedia(note.id, Array.from(fileList))
+      const media = await onUploadMedia(Array.from(fileList))
+      if (media.length === 0) return
+      const nowTs = Date.now()
+      const caret = caretRef.current
+      const idx =
+        caret !== null ? note.blocks.findIndex((b) => b.id === caret.blockId) : -1
+      let blocks: typeof note.blocks
+      if (idx >= 0 && note.blocks[idx].type === 'text') {
+        // Split the focused text block at the caret and drop media in between,
+        // so the note reads text → media → text as one continuous flow.
+        const target = note.blocks[idx] as { id: string; type: 'text'; text: string }
+        const pos = Math.min(Math.max(caret?.pos ?? target.text.length, 0), target.text.length)
+        const before = { ...target, text: target.text.slice(0, pos) }
+        const after = makeTextBlock(nowTs, target.text.slice(pos))
+        blocks = normalizeBlocks(
+          [
+            ...note.blocks.slice(0, idx),
+            before,
+            ...media,
+            after,
+            ...note.blocks.slice(idx + 1),
+          ],
+          nowTs,
+        )
+        setFocusBlockId(after.id)
+      } else {
+        blocks = normalizeBlocks([...note.blocks, ...media], nowTs)
+        const last = blocks[blocks.length - 1]
+        if (last.type === 'text') setFocusBlockId(last.id)
+      }
+      onChangeNote(note.id, { blocks })
     } finally {
       setUploading(false)
       if (fileInputRef.current !== null) fileInputRef.current.value = ''
     }
   }
+
+  const firstTextId = note.blocks.find((b) => b.type === 'text')?.id ?? null
 
   return (
     <aside className="notes" role="dialog" aria-label="Note">
@@ -395,6 +433,14 @@ function NoteView({
             <TextBlockView
               key={block.id}
               value={block.text}
+              // Only the first text block invites text; blocks after media stay
+              // placeholder-free so they don't read as a separate empty note.
+              placeholder={block.id === firstTextId ? 'Start writing…' : ''}
+              autoFocus={block.id === focusBlockId}
+              onFocused={() => setFocusBlockId(null)}
+              onActive={(pos) => {
+                caretRef.current = { blockId: block.id, pos }
+              }}
               onChange={(text) => setBlockText(block.id, text)}
             />
           ) : (
@@ -438,9 +484,17 @@ function NoteView({
 /** A plain-text paragraph as an auto-growing textarea (no formatting). */
 function TextBlockView({
   value,
+  placeholder,
+  autoFocus,
+  onFocused,
+  onActive,
   onChange,
 }: {
   value: string
+  placeholder: string
+  autoFocus: boolean
+  onFocused: () => void
+  onActive: (pos: number) => void
   onChange: (text: string) => void
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -453,14 +507,35 @@ function TextBlockView({
   }
   useLayoutEffect(grow, [value])
 
+  // Take focus when asked (the block right after just-inserted media), placing
+  // the caret at its start so typing continues below the image.
+  useLayoutEffect(() => {
+    if (!autoFocus || ref.current === null) return
+    ref.current.focus()
+    ref.current.setSelectionRange(0, 0)
+    onFocused()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFocus])
+
+  const reportCaret = () => {
+    if (ref.current !== null) onActive(ref.current.selectionStart)
+  }
+
   return (
     <textarea
       ref={ref}
       className="notes__text"
       rows={1}
       value={value}
-      placeholder="Start writing…"
-      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      onChange={(e) => {
+        onChange(e.target.value)
+        onActive(e.target.selectionStart)
+      }}
+      onFocus={reportCaret}
+      onClick={reportCaret}
+      onKeyUp={reportCaret}
+      onSelect={reportCaret}
       onInput={grow}
     />
   )

@@ -284,21 +284,24 @@
 }
 
 /* ---- Single-note view ---- */
+/* Block layout (not flex): children keep their own height and the container
+   scrolls when the note is taller than the pane. A flex column would shrink
+   the auto-grown textareas to fit, clipping long notes. */
 .notes__doc {
-  display: flex;
-  flex-direction: column;
+  display: block;
   padding: 12px 16px 40px;
 }
 
 .notes__doc-date {
-  align-self: center;
   margin-bottom: 8px;
+  text-align: center;
   font-size: 11px;
   color: var(--text-faint);
 }
 
 .notes__doc-title {
-  flex: 0 0 auto;
+  display: block;
+  width: 100%;
   margin-bottom: 2px;
   padding: 0;
   border: none;
@@ -339,29 +342,35 @@
   outline: none;
 }
 
-/* Inline image/video block. */
+/* Inline image/video block: sized to its natural aspect ratio (no letterbox
+   bars), rounded, and never wider than the column. */
 .notes__media {
   position: relative;
+  display: inline-block;
+  max-width: 100%;
   margin: 8px 0;
   border-radius: 10px;
   overflow: hidden;
-  background: var(--bg);
+  line-height: 0;
 }
 
 .notes__media-el {
   display: block;
-  width: 100%;
-  max-height: 320px;
-  object-fit: contain;
-  background: #000;
+  max-width: 100%;
+  max-height: 60vh;
+  height: auto;
+  width: auto;
 }
 
 .notes__media-loading,
 .notes__media-error {
+  min-width: 180px;
   padding: 22px 12px;
+  background: var(--raised);
   text-align: center;
   color: var(--text-faint);
   font-size: 12px;
+  line-height: 1.4;
 }
 
 .notes__media-del {
