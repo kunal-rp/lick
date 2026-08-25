@@ -321,25 +321,109 @@
   outline: none;
 }
 
-.notes__text {
-  width: 100%;
-  border: none;
-  background: transparent;
+/* Rich-text run (Lexical) — plain paragraphs plus bullet & checklist items. */
+.note-rte {
+  position: relative;
+}
+
+.note-ce {
+  outline: none;
   padding: 2px 0;
-  resize: none;
-  overflow: hidden;
   color: var(--text);
   font-family: inherit;
   font-size: 16px;
   line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.notes__text::placeholder {
+.note-ph {
+  position: absolute;
+  top: 2px;
+  left: 0;
   color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1.55;
+  pointer-events: none;
+  user-select: none;
 }
 
-.notes__text:focus {
+.note-p {
+  margin: 0;
+}
+
+.note-ul {
+  margin: 2px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-li {
+  position: relative;
+  margin: 1px 0;
+  padding-left: 24px;
+}
+
+/* Bullet marker for plain list items (not checklist items). */
+.note-li:not(.note-li--checked):not(.note-li--unchecked)::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+.note-li--nested {
+  margin-left: 20px;
+}
+
+/* Checklist items: a tappable checkbox drawn as the item's ::before. */
+.note-li--checked,
+.note-li--unchecked {
+  position: relative;
+  margin: 1px 0;
+  padding-left: 26px;
+  list-style: none;
   outline: none;
+}
+
+.note-li--checked::before,
+.note-li--unchecked::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.2em;
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.note-li--checked {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.note-li--checked::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.note-li--checked::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: calc(0.2em + 2px);
+  width: 4px;
+  height: 8px;
+  border: solid var(--on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  cursor: pointer;
 }
 
 /* Inline image/video block: sized to its natural aspect ratio (no letterbox
@@ -397,8 +481,8 @@
   cursor: default;
 }
 
-/* ---- Note attach bar ---- */
-.notes__attach {
+/* ---- Note bottom bar: checklist / bullet / attach ---- */
+.notes__tool {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -411,16 +495,16 @@
   cursor: pointer;
 }
 
-.notes__attach svg {
+.notes__tool svg {
   width: 22px;
   height: 22px;
 }
 
-.notes__attach:hover:not(:disabled) {
+.notes__tool:hover:not(:disabled) {
   background: var(--hover);
 }
 
-.notes__attach:disabled {
+.notes__tool:disabled {
   opacity: 0.5;
   cursor: default;
 }

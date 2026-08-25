@@ -1,4 +1,27 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { LexicalComposer } from '@lexical/react/LexicalComposer'
+import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
+import { ContentEditable } from '@lexical/react/LexicalContentEditable'
+import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin'
+import { ListPlugin } from '@lexical/react/LexicalListPlugin'
+import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin'
+import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin'
+import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin'
+import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
+import type { EditorState, LexicalEditor } from 'lexical'
+import {
+  ListNode,
+  ListItemNode,
+  INSERT_UNORDERED_LIST_COMMAND,
+  INSERT_CHECK_LIST_COMMAND,
+} from '@lexical/list'
+import {
+  $convertFromMarkdownString,
+  $convertToMarkdownString,
+  CHECK_LIST,
+  UNORDERED_LIST,
+} from '@lexical/markdown'
 import {
   type MediaBlock,
   type Note,
@@ -8,6 +31,23 @@ import {
   sortedNotes,
 } from '../notes'
 import './NotesPanel.css'
+
+// The list vocabulary a note supports — checklists ("- [ ] ") and bullets
+// ("- "), auto-detected as you type and round-tripped as Markdown. CHECK_LIST
+// is first so "- [ ] " matches it, not the plain bullet transformer.
+const NOTE_TRANSFORMERS = [CHECK_LIST, UNORDERED_LIST]
+
+// Lexical theme → CSS class names for the note editor (see NotesPanel.css).
+const NOTE_EDITOR_THEME = {
+  paragraph: 'note-p',
+  list: {
+    ul: 'note-ul',
+    listitem: 'note-li',
+    listitemChecked: 'note-li--checked',
+    listitemUnchecked: 'note-li--unchecked',
+    nested: { listitem: 'note-li--nested' },
+  },
+}
 
 interface NotesPanelProps {
   /** All notes for the open project. */
@@ -68,6 +108,27 @@ function TrashIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
+    </svg>
+  )
+}
+function ChecklistIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="7" height="7" rx="1.6" />
+      <path d="M4.8 7.4l1.4 1.4 2.2-2.6" />
+      <path d="M13 6.5h8M13 17.5h8" />
+      <rect x="3" y="14" width="7" height="7" rx="1.6" />
+    </svg>
+  )
+}
+function BulletIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="4.5" cy="7" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="4.5" cy="17" r="1.4" fill="currentColor" stroke="none" />
+      <path d="M9 7h12M9 17h12" />
     </svg>
   )
 }
@@ -316,11 +377,17 @@ function NoteView({
   const titleRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const now = useMemo(() => Date.now(), [note.modifiedAt])
-  // The text block + caret offset last touched, so inserted media lands inline
-  // where the writer is, not dumped at the end.
-  const caretRef = useRef<{ blockId: string; pos: number } | null>(null)
+  // The text run last focused (its block id) and its Lexical editor, so list
+  // buttons target it and inserted media lands right after it.
+  const focusedBlockRef = useRef<string | null>(null)
+  const activeEditorRef = useRef<LexicalEditor | null>(null)
   // A block to focus on the next render (the text right after inserted media).
   const [focusBlockId, setFocusBlockId] = useState<string | null>(null)
+
+  const handleEditorFocus = (blockId: string, editor: LexicalEditor) => {
+    focusedBlockRef.current = blockId
+    activeEditorRef.current = editor
+  }
 
   // On open, collapse any stray/legacy block shape (e.g. an old note whose text
   // was split across separate blocks) to the canonical one — before the user
@@ -356,38 +423,27 @@ function NoteView({
       const media = await onUploadMedia(Array.from(fileList))
       if (media.length === 0) return
       const nowTs = Date.now()
-      const caret = caretRef.current
-      const idx =
-        caret !== null ? note.blocks.findIndex((b) => b.id === caret.blockId) : -1
-      let blocks: typeof note.blocks
-      if (idx >= 0 && note.blocks[idx].type === 'text') {
-        // Split the focused text block at the caret and drop media in between,
-        // so the note reads text → media → text as one continuous flow.
-        const target = note.blocks[idx] as { id: string; type: 'text'; text: string }
-        const pos = Math.min(Math.max(caret?.pos ?? target.text.length, 0), target.text.length)
-        const before = { ...target, text: target.text.slice(0, pos) }
-        const after = makeTextBlock(nowTs, target.text.slice(pos))
-        blocks = normalizeBlocks(
-          [
-            ...note.blocks.slice(0, idx),
-            before,
-            ...media,
-            after,
-            ...note.blocks.slice(idx + 1),
-          ],
-          nowTs,
-        )
-        setFocusBlockId(after.id)
-      } else {
-        blocks = normalizeBlocks([...note.blocks, ...media], nowTs)
-        const last = blocks[blocks.length - 1]
-        if (last.type === 'text') setFocusBlockId(last.id)
-      }
+      // Insert the media right after the focused text run (not at the very end),
+      // followed by a fresh text block to keep writing in below it. We insert
+      // after the run rather than splitting it so no existing editor reseeds.
+      const fid = focusedBlockRef.current
+      const idx = fid !== null ? note.blocks.findIndex((b) => b.id === fid) : -1
+      const at = idx >= 0 ? idx + 1 : note.blocks.length
+      const after = makeTextBlock(nowTs)
+      const blocks = normalizeBlocks(
+        [...note.blocks.slice(0, at), ...media, after, ...note.blocks.slice(at)],
+        nowTs,
+      )
+      setFocusBlockId(after.id)
       onChangeNote(note.id, { blocks })
     } finally {
       setUploading(false)
       if (fileInputRef.current !== null) fileInputRef.current.value = ''
     }
+  }
+
+  const insertList = (command: typeof INSERT_UNORDERED_LIST_COMMAND | typeof INSERT_CHECK_LIST_COMMAND) => {
+    activeEditorRef.current?.dispatchCommand(command, undefined)
   }
 
   const firstTextId = note.blocks.find((b) => b.type === 'text')?.id ?? null
@@ -430,17 +486,16 @@ function NoteView({
         />
         {note.blocks.map((block) =>
           block.type === 'text' ? (
-            <TextBlockView
+            <NoteTextEditor
               key={block.id}
+              blockId={block.id}
               value={block.text}
               // Only the first text block invites text; blocks after media stay
               // placeholder-free so they don't read as a separate empty note.
               placeholder={block.id === firstTextId ? 'Start writing…' : ''}
               autoFocus={block.id === focusBlockId}
               onFocused={() => setFocusBlockId(null)}
-              onActive={(pos) => {
-                caretRef.current = { blockId: block.id, pos }
-              }}
+              onEditorFocus={handleEditorFocus}
               onChange={(text) => setBlockText(block.id, text)}
             />
           ) : (
@@ -458,7 +513,27 @@ function NoteView({
       <div className="notes__bottombar">
         <button
           type="button"
-          className="notes__attach"
+          className="notes__tool"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => insertList(INSERT_CHECK_LIST_COMMAND)}
+          aria-label="Checklist"
+          title="Checklist"
+        >
+          <ChecklistIcon />
+        </button>
+        <button
+          type="button"
+          className="notes__tool"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => insertList(INSERT_UNORDERED_LIST_COMMAND)}
+          aria-label="Bulleted list"
+          title="Bulleted list"
+        >
+          <BulletIcon />
+        </button>
+        <button
+          type="button"
+          className="notes__tool"
           onClick={() => fileInputRef.current?.click()}
           disabled={busy || uploading}
           aria-label="Add photo or video"
@@ -481,64 +556,116 @@ function NoteView({
   )
 }
 
-/** A plain-text paragraph as an auto-growing textarea (no formatting). */
-function TextBlockView({
-  value,
-  placeholder,
+// Captures the Lexical editor instance for the containing text run and drives
+// focus: reports focus to the parent (for list buttons / media insertion) and
+// takes focus when asked (the run created right after inserted media).
+function EditorControlPlugin({
+  blockId,
   autoFocus,
   onFocused,
-  onActive,
-  onChange,
+  onEditorFocus,
 }: {
-  value: string
-  placeholder: string
+  blockId: string
   autoFocus: boolean
   onFocused: () => void
-  onActive: (pos: number) => void
-  onChange: (text: string) => void
+  onEditorFocus: (blockId: string, editor: LexicalEditor) => void
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null)
+  const [editor] = useLexicalComposerContext()
 
-  const grow = () => {
-    const el = ref.current
-    if (el === null) return
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
-  }
-  useLayoutEffect(grow, [value])
-
-  // Take focus when asked (the block right after just-inserted media), placing
-  // the caret at its start so typing continues below the image.
-  useLayoutEffect(() => {
-    if (!autoFocus || ref.current === null) return
-    ref.current.focus()
-    ref.current.setSelectionRange(0, 0)
+  useEffect(() => {
+    if (!autoFocus) return
+    editor.focus()
+    onEditorFocus(blockId, editor)
     onFocused()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocus])
 
-  const reportCaret = () => {
-    if (ref.current !== null) onActive(ref.current.selectionStart)
+  return null
+}
+
+/**
+ * One contiguous run of note text as a Lexical rich-text editor. Supports
+ * bullet lists and to-do checklists — auto-detected as you type "- " / "- [ ] "
+ * (and via the bottom-bar buttons) — with interactive checkboxes. Uncontrolled
+ * after mount; content is mirrored out as Markdown via onChange.
+ */
+function NoteTextEditor({
+  blockId,
+  value,
+  placeholder,
+  autoFocus,
+  onFocused,
+  onEditorFocus,
+  onChange,
+}: {
+  blockId: string
+  value: string
+  placeholder: string
+  autoFocus: boolean
+  onFocused: () => void
+  onEditorFocus: (blockId: string, editor: LexicalEditor) => void
+  onChange: (text: string) => void
+}) {
+  const editorRef = useRef<LexicalEditor | null>(null)
+  // OnChangePlugin fires once for the seed state; skip it so opening a note
+  // isn't recorded as an edit.
+  const seededRef = useRef(false)
+
+  const initialConfig = {
+    namespace: 'note-editor',
+    theme: NOTE_EDITOR_THEME,
+    nodes: [ListNode, ListItemNode],
+    editorState: () => $convertFromMarkdownString(value, NOTE_TRANSFORMERS),
+    onError: (error: Error) => console.error('[note-editor]', error),
+  }
+
+  const handleChange = (state: EditorState) => {
+    state.read(() => {
+      const markdown = $convertToMarkdownString(NOTE_TRANSFORMERS)
+      if (!seededRef.current) {
+        seededRef.current = true
+        return
+      }
+      onChange(markdown)
+    })
   }
 
   return (
-    <textarea
-      ref={ref}
-      className="notes__text"
-      rows={1}
-      value={value}
-      placeholder={placeholder}
-      onChange={(e) => {
-        onChange(e.target.value)
-        onActive(e.target.selectionStart)
+    <div
+      className="note-rte"
+      onFocusCapture={() => {
+        if (editorRef.current !== null) onEditorFocus(blockId, editorRef.current)
       }}
-      onFocus={reportCaret}
-      onClick={reportCaret}
-      onKeyUp={reportCaret}
-      onSelect={reportCaret}
-      onInput={grow}
-    />
+    >
+      <LexicalComposer initialConfig={initialConfig}>
+        <EditorCapturePlugin onReady={(ed) => (editorRef.current = ed)} />
+        <EditorControlPlugin
+          blockId={blockId}
+          autoFocus={autoFocus}
+          onFocused={onFocused}
+          onEditorFocus={onEditorFocus}
+        />
+        <RichTextPlugin
+          contentEditable={<ContentEditable className="note-ce" spellCheck />}
+          placeholder={<div className="note-ph">{placeholder}</div>}
+          ErrorBoundary={LexicalErrorBoundary}
+        />
+        <HistoryPlugin />
+        <ListPlugin />
+        <CheckListPlugin />
+        <MarkdownShortcutPlugin transformers={NOTE_TRANSFORMERS} />
+        <OnChangePlugin onChange={handleChange} ignoreSelectionChange />
+      </LexicalComposer>
+    </div>
   )
+}
+
+function EditorCapturePlugin({ onReady }: { onReady: (editor: LexicalEditor) => void }) {
+  const [editor] = useLexicalComposerContext()
+  useEffect(() => {
+    onReady(editor)
+  }, [editor, onReady])
+  return null
 }
 
 /** An inline image/video, fetched from Drive and shown with a delete control. */

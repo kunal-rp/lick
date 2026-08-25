@@ -93,7 +93,8 @@ export function makeNote(now: number): Note {
  * consecutive text blocks merge into a single text block (so the body reads as
  * one continuous writing surface, not several stacked boxes), and a trailing
  * empty text block is kept only when needed as a place to type below media.
- * Merging preserves the first block's id so the open textarea keeps focus.
+ * A merged block gets a fresh id so the rich-text editor bound to it remounts
+ * and reseeds from the merged content (it is otherwise uncontrolled).
  */
 export function normalizeBlocks(blocks: NoteBlock[], now: number): NoteBlock[] {
   const out: NoteBlock[] = []
@@ -108,7 +109,7 @@ export function normalizeBlocks(blocks: NoteBlock[], now: number): NoteBlock[] {
           : b.text === ''
             ? prev.text
             : `${prev.text}\n${b.text}`
-      out[out.length - 1] = { ...prev, text: merged }
+      out[out.length - 1] = { ...prev, id: makeId(now), text: merged }
     } else {
       out.push(b)
     }
@@ -124,12 +125,20 @@ export function mediaBlocks(note: Note): MediaBlock[] {
   return note.blocks.filter((b): b is MediaBlock => b.type !== 'text')
 }
 
+// Strip a leading list/checklist marker ("- ", "* ", "- [ ] ", "- [x] ") so the
+// list preview reads as its text, not its Markdown source.
+function stripListMarker(line: string): string {
+  return line.replace(/^\s*(?:[-*+]\s+)?(?:\[[ xX]?\]\s+)?/, '')
+}
+
 /** A short preview of a note's body for the list: first text, else media hint. */
 export function noteSnippet(note: Note): string {
   for (const block of note.blocks) {
     if (block.type === 'text') {
-      const trimmed = block.text.trim()
-      if (trimmed.length > 0) return trimmed
+      for (const line of block.text.split('\n')) {
+        const trimmed = stripListMarker(line).trim()
+        if (trimmed.length > 0) return trimmed
+      }
     }
   }
   const media = mediaBlocks(note)[0]
