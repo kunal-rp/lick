@@ -177,53 +177,10 @@
    Layout mirrors the version bar: the "Edit" back-button and "Preview" title on
    the left, the panel actions pushed to the right by a flexible spacer. */
 @media (max-width: 768px) {
-  .preview__zoom {
+  /* Mobile has no toolbar controls (zoom via pinch/auto-fit; Fit + Sections
+     moved to the top-bar options menu), so drop the otherwise-empty bar. */
+  .preview__toolbar {
     display: none;
-  }
-
-  .preview__edit {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    flex: 0 0 auto;
-    padding: 6px 12px;
-    border: 1px solid var(--pv-border);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--pv-text);
-    font: inherit;
-    font-size: 13px;
-    line-height: 1;
-    cursor: pointer;
-    transition: background 0.1s ease, color 0.1s ease;
-  }
-
-  .preview__edit:hover {
-    background: var(--pv-hover);
-  }
-
-  /* Mode title, sitting just after the Edit button. */
-  .preview__mode-label {
-    display: inline-block;
-    flex: 0 0 auto;
-    color: var(--pv-text-muted);
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-  }
-
-  /* Flexible gap that pushes the panel options (Fit, Sections) to the right. */
-  .preview__mode-spacer {
-    display: block;
-    flex: 1 1 auto;
-  }
-
-  /* Panel options as comfortable touch targets, matching the Edit button. */
-  .preview__zoom-fit,
-  .preview__sections-toggle {
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 13px;
   }
 
   /* Section-label pills render outside the page's zoom transform, so on the

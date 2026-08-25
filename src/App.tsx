@@ -674,6 +674,28 @@ export default function App() {
       return !v
     })
 
+  // Mobile navigates between three full-screen views with one cycling control:
+  // Editor → Preview → Notes → Editor (see VersionBar).
+  type MobileView = 'editor' | 'preview' | 'notes'
+  const mobileView: MobileView = showNotes
+    ? 'notes'
+    : showPreview
+      ? 'preview'
+      : 'editor'
+  const setMobileView = (view: MobileView) => {
+    setShowHistory(false)
+    setShowNotes(view === 'notes')
+    if (view !== 'notes') setShowPreview(view === 'preview')
+  }
+  const cycleMobileView = () => {
+    const order: MobileView[] = ['editor', 'preview', 'notes']
+    setMobileView(order[(order.indexOf(mobileView) + 1) % order.length])
+  }
+
+  // Bumped to ask the preview to (re)fit the page to the pane — driven from the
+  // top-bar options menu on mobile (where the preview has no Fit button).
+  const [fitNonce, setFitNonce] = useState(0)
+
   // Write the accumulated snapshots to the project's history.json (creating it
   // the first time). Debounced and guarded so it only writes the project it was
   // scheduled for, and never blocks editing.
@@ -1108,8 +1130,13 @@ export default function App() {
               onNewVersion={newVersion}
               onExportPdf={exportPdf}
               onToggleNav={() => setNavCollapsed(false)}
-              showNotes={showNotes}
-              onToggleNotes={toggleNotes}
+              mobileView={mobileView}
+              onCycleView={cycleMobileView}
+              onSetView={setMobileView}
+              onFit={() => setFitNonce((n) => n + 1)}
+              sectionsAvailable={sections.length > 0}
+              showSections={showSections}
+              onToggleSections={() => setShowSections((v) => !v)}
             />
             <div className="workspace__editor">
               {(() => {
@@ -1133,28 +1160,29 @@ export default function App() {
                       }
                     }}
                     onRevealInPreview={revealInPreview}
-                    viewToggles={[
-                      {
-                        key: 'preview',
-                        glyph: '📄',
-                        label: 'Preview',
-                        title: 'Show or hide the preview',
-                        active: showPreview,
-                        onToggle: () => setShowPreview((v) => !v),
-                      },
-                      {
-                        key: 'history',
-                        glyph: '🕘',
-                        label: 'History',
-                        title: 'View and restore recent edits',
-                        active: showHistory,
-                        onToggle: toggleHistory,
-                      },
-                      // On mobile the Notes toggle lives in the top VersionBar
-                      // instead (and the panel opens full-screen).
-                      ...(isMobile
+                    // Desktop only: Preview/History/Notes toggles live in the
+                    // editor toolbar. On mobile the top-bar cycle control drives
+                    // Editor/Preview/Notes instead.
+                    viewToggles={
+                      isMobile
                         ? []
                         : [
+                            {
+                              key: 'preview',
+                              glyph: '📄',
+                              label: 'Preview',
+                              title: 'Show or hide the preview',
+                              active: showPreview,
+                              onToggle: () => setShowPreview((v) => !v),
+                            },
+                            {
+                              key: 'history',
+                              glyph: '🕘',
+                              label: 'History',
+                              title: 'View and restore recent edits',
+                              active: showHistory,
+                              onToggle: toggleHistory,
+                            },
                             {
                               key: 'notes',
                               glyph: '🗒️',
@@ -1163,8 +1191,8 @@ export default function App() {
                               active: showNotes,
                               onToggle: toggleNotes,
                             },
-                          ]),
-                    ]}
+                          ]
+                    }
                   />
                 )
                 const previewNode = (
@@ -1176,7 +1204,7 @@ export default function App() {
                     sections={sections}
                     showSections={showSections}
                     onToggleSections={() => setShowSections((v) => !v)}
-                    onExitToEditor={() => setShowPreview(false)}
+                    fitNonce={fitNonce}
                     versionId={selectedVersionId}
                     comments={comments.filter(
                       (c) => c.versionId === selectedVersionId,
@@ -1190,8 +1218,7 @@ export default function App() {
                 // preview, so with the preview hidden the editor fills the pane.
                 if (!showPreview) return editorNode
                 // Mobile: editor and preview are mutually exclusive full-screen
-                // views. With the preview on it takes the whole screen (its
-                // toolbar carries the button back to the editor) — no
+                // views (the top-bar cycle control switches between them) — no
                 // side-by-side split, no insights panel.
                 if (isMobile) return previewNode
                 return (

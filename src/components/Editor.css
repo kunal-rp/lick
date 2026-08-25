@@ -60,6 +60,21 @@
   text-decoration: underline;
 }
 
+/* Mobile: render B/I/U as plain letters. The styled glyphs (bold/italic/
+   underlined) read as an "already selected" state on a phone; plain labels make
+   clear the buttons are unpressed. */
+@media (max-width: 768px) {
+  .toolbar__btn--bold .toolbar__glyph {
+    font-weight: 400;
+  }
+  .toolbar__btn--italic .toolbar__glyph {
+    font-style: normal;
+  }
+  .toolbar__btn--underline .toolbar__glyph {
+    text-decoration: none;
+  }
+}
+
 /* Find-in-editor: an always-visible input group with match navigation. */
 .toolbar__search {
   position: relative;

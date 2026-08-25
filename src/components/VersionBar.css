@@ -110,18 +110,40 @@
   color: var(--on-accent);
 }
 
-/* Notes toggle (mobile only) — on desktop, Notes lives in the editor toolbar. */
-.verbar__notes {
+/* View-cycle control (mobile only) — on desktop the toggles live in the editor
+   and preview toolbars. */
+.verbar__viewcycle {
+  position: relative;
   display: none;
-  font-size: 15px;
-  line-height: 1;
-  padding: 5px 9px;
+  flex: 0 0 auto;
 }
 
-.verbar__notes--active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
+.verbar__view {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  line-height: 1;
+  touch-action: none;
+}
+
+.verbar__view-label {
+  font-size: 12px;
+}
+
+.verbar__popup--left {
+  right: auto;
+  left: 0;
+}
+
+.verbar__popup-item--active {
+  background: var(--selected);
+}
+
+.verbar__popup-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
 }
 
 /* Options menu (mobile only) — hidden on desktop, where the actions are inline. */
@@ -173,27 +195,26 @@
 }
 
 /*
- * Mobile: the drawer toggle sits inline at the bar's left, and the bar wraps
- * its controls onto a second row rather than scroll or overflow when they don't
- * all fit across a narrow viewport.
+ * Mobile: the drawer toggle sits inline at the bar's left, and everything fits
+ * on a single row — the project name truncates and the less-used actions move
+ * into the options (⋯) menu.
  */
 @media (max-width: 768px) {
   .verbar {
-    height: auto;
-    min-height: 40px;
-    padding-top: 6px;
-    padding-bottom: 6px;
-    flex-wrap: wrap;
-    row-gap: 6px;
+    height: 44px;
+    padding: 0 8px;
+    gap: 6px;
+    flex-wrap: nowrap;
   }
 
   .verbar__nav {
     display: inline-flex;
   }
 
-  /* The project name may claim the first row on its own; let it truncate. */
+  /* Truncate the project name so the row never wraps or overflows. */
   .verbar__project {
-    max-width: 100%;
+    flex: 0 1 auto;
+    min-width: 0;
   }
 
   /* Supplementary, and the button already reflects the state — hide to save room. */
@@ -215,8 +236,7 @@
     display: block;
   }
 
-  .verbar__notes {
-    display: inline-flex;
-    align-items: center;
+  .verbar__viewcycle {
+    display: block;
   }
 }

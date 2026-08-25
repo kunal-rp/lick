@@ -28,8 +28,9 @@ interface PreviewProps {
   showSections?: boolean
   /** Toggle the section rendering (wired to the toolbar button). */
   onToggleSections?: () => void
-  /** Return to the editor (mobile: editor/preview are full-screen toggles). */
-  onExitToEditor?: () => void
+  /** Bumped to request a (re)fit of the page to the pane (mobile: from the
+   *  top-bar options menu, which replaces the in-preview Fit button). */
+  fitNonce?: number
   /** Comments anchored to the version currently shown. */
   comments?: Comment[]
   /** The version id to anchor new comments to (null hides commenting). */
@@ -129,7 +130,7 @@ export function Preview({
   sections = [],
   showSections = false,
   onToggleSections,
-  onExitToEditor,
+  fitNonce = 0,
   comments = [],
   versionId = null,
   authorName = 'You',
@@ -639,6 +640,16 @@ export function Preview({
     setZoom(clampZoom(Math.floor((available / pageWidthPx) * 100)))
   }, [])
 
+  // A Fit request from the top-bar options menu (mobile): clear any manual
+  // pinch and re-fit the page to the pane. Ignores the initial mount (nonce 0).
+  const fitNonceRef = useRef(fitNonce)
+  useEffect(() => {
+    if (fitNonce === fitNonceRef.current) return
+    fitNonceRef.current = fitNonce
+    userZoomedRef.current = false
+    fitToPane()
+  }, [fitNonce, fitToPane])
+
   // Mobile auto-fit: fit the page to the pane on load and on every pane resize
   // (rotation, keyboard), unless the reader has pinch-zoomed by hand.
   useEffect(() => {
@@ -971,20 +982,6 @@ export function Preview({
   return (
     <div className="preview">
       <div className="preview__toolbar">
-        {isMobile && onExitToEditor !== undefined && (
-          <>
-            <button
-              type="button"
-              className="preview__edit"
-              onClick={onExitToEditor}
-              title="Back to the editor"
-            >
-              <span aria-hidden="true">✏️</span> Edit
-            </button>
-            <span className="preview__mode-label">Preview</span>
-            <span className="preview__mode-spacer" aria-hidden="true" />
-          </>
-        )}
         <label className="preview__zoom">
           <span className="preview__zoom-label">Zoom</span>
           <input
@@ -1002,34 +999,26 @@ export function Preview({
           />
           <span className="preview__zoom-value">{Math.round(zoom)}%</span>
         </label>
-        <button
-          type="button"
-          className={`preview__zoom-fit${
-            !isMobile && autoFit ? ' preview__zoom-fit--active' : ''
-          }`}
-          // Desktop: toggle sticky auto-fit. Mobile has no zoom slider and
-          // already auto-fits, so here Fit is a one-shot "re-fit" that clears any
-          // manual pinch and refits the page to the pane.
-          onClick={() => {
-            if (isMobile) {
-              userZoomedRef.current = false
-              fitToPane()
-            } else {
-              setAutoFit((v) => !v)
-            }
-          }}
-          aria-pressed={isMobile ? undefined : autoFit}
-          title={
-            isMobile
-              ? 'Fit the page to the screen'
-              : autoFit
+        {/* Desktop: Fit + Sections live here. On mobile they move to the
+            top-bar options (⋯) menu, so the preview toolbar stays minimal. */}
+        {!isMobile && (
+          <button
+            type="button"
+            className={`preview__zoom-fit${
+              autoFit ? ' preview__zoom-fit--active' : ''
+            }`}
+            onClick={() => setAutoFit((v) => !v)}
+            aria-pressed={autoFit}
+            title={
+              autoFit
                 ? 'Auto-fit on: the preview refits as the pane resizes'
                 : 'Fit the page to the pane and keep it fitted on resize'
-          }
-        >
-          Fit
-        </button>
-        {sections.length > 0 && onToggleSections !== undefined && (
+            }
+          >
+            Fit
+          </button>
+        )}
+        {!isMobile && sections.length > 0 && onToggleSections !== undefined && (
           <button
             type="button"
             className={`preview__sections-toggle${

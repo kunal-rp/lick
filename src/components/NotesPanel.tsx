@@ -260,7 +260,7 @@ function NotesListView({
 
   return (
     <aside className="notes" role="dialog" aria-label="Project notes">
-      <div className="notes__nav">
+      <div className="notes__nav notes__nav--list">
         <span className="notes__nav-spacer" />
         <button
           type="button"

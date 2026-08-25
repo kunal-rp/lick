@@ -535,4 +535,11 @@
     border-left: none;
     box-shadow: none;
   }
+
+  /* The list view's top bar only carried a Close button; on mobile the top-bar
+     view-cycle control leaves notes, so drop it. (The note view keeps its bar
+     for back-to-list and delete.) */
+  .notes__nav--list {
+    display: none;
+  }
 }
