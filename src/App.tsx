@@ -14,6 +14,7 @@ import { FileNav } from './components/FileNav'
 import { Sidebar } from './components/Sidebar'
 import { OutlinePanel } from './components/OutlinePanel'
 import { DraftsPanel } from './components/DraftsPanel'
+import { ChangesView } from './components/ChangesView'
 import { VersionBar } from './components/VersionBar'
 import { NotesPanel } from './components/NotesPanel'
 import { CommandPalette, type Command } from './components/CommandPalette'
@@ -31,7 +32,6 @@ import {
   type DriveFile,
 } from './drive/files'
 import {
-  isHistoryFile,
   listPdfs,
   isNotesFile,
   isPdf,
@@ -39,16 +39,6 @@ import {
   parseVersions,
   versionFileName,
 } from './drive/versions'
-import {
-  HISTORY_FILENAME,
-  appendSnapshot,
-  makeSnapshot,
-  parseHistory,
-  serializeHistory,
-  snapshotsForVersion,
-  type HistorySnapshot,
-  type SnapshotKind,
-} from './history'
 import { lineTypes, parseSections } from './fountain'
 import { buildScreenplayPdf } from './pdf'
 import {
@@ -90,11 +80,6 @@ const SHIFT_MOD = MOD_KEY === '\u2318' ? '\u21e7\u2318' : 'Ctrl+Shift+'
 const AUTOSAVE_IDLE_MS = 1500
 const AUTOSAVE_MAX_MS = 8000
 const AUTOSAVE_CHANGE_THRESHOLD = 40
-
-// Edit-history snapshots pile up in memory as the user edits; the JSON file is
-// written to Drive this long after the last change, so history writes lag —
-// never race — the version saves.
-const HISTORY_WRITE_DEBOUNCE_MS = 5000
 
 // Notes are edited live in memory; the JSON file is written this long after the
 // last change so typing in a note never blocks on a Drive round-trip.
@@ -181,6 +166,18 @@ export default function App() {
   // as "you are here".
   const [caretLine, setCaretLine] = useState(0)
 
+  // The draft whose changes the Changes view is showing, and the two texts it
+  // is comparing. Loaded on demand: the predecessor draft is a Drive file we
+  // don't otherwise hold, and there's no reason to fetch it until asked.
+  const [comparingId, setComparingId] = useState<string | null>(null)
+  const [comparison, setComparison] = useState<{
+    baseLabel: string
+    headLabel: string
+    base: string | null
+    head: string | null
+    error: string | null
+  } | null>(null)
+
   // The script lines currently selected, from whichever pane the writer
   // selected in. This is what a note quotes when you press its quote button.
   const [scriptSelection, setScriptSelection] = useState<{
@@ -207,28 +204,9 @@ export default function App() {
     revealInPreview(line)
   }
 
-  // Bumped to force the (otherwise uncontrolled) editor to remount and re-seed
-  // its text — used when restoring a history snapshot into the open version.
-  const [editorReloadNonce, setEditorReloadNonce] = useState(0)
-
-  // Recent edit-history snapshots for the selected project (all versions), from
-  // its history.json. Captured as the user edits; browsable in the History
-  // dialog, where any snapshot can be restored.
-  const [history, setHistory] = useState<HistorySnapshot[]>([])
   // Command palette visibility. Deliberately not persisted — it is a momentary
   // door, not a layout.
   const [showCommands, setShowCommands] = useState(false)
-  // Live mirror of `history` for the async snapshot recorder/writer, plus the
-  // project it belongs to and the Drive file id (created lazily on first write).
-  const historyRef = useRef<HistorySnapshot[]>([])
-  const historyProjectIdRef = useRef<string | null>(null)
-  const historyFileIdRef = useRef<string | null>(null)
-  // Which project's history is loaded, so a versionsByProject refresh (e.g. after
-  // creating history.json) doesn't clobber freshly recorded in-memory snapshots.
-  const loadedHistoryProjectRef = useRef<string | null>(null)
-  const historyDirtyRef = useRef(false)
-  const historyWriteTimer = useRef<number>(0)
-
   // Notes for the selected project (all versions), from its notes.json. Edited
   // live in the Notes pane; writes to Drive are debounced. Mirrored to refs
   // for the async writer, guarded like history so a project switch mid-flush
@@ -489,50 +467,6 @@ export default function App() {
     }
   }, [selectedVersionId, versionsByProject])
 
-  // Load the selected project's edit history (a single history.json for all its
-  // versions). Only re-reads when the project actually changes — a
-  // versionsByProject refresh (e.g. right after we create history.json) must not
-  // overwrite snapshots recorded in memory since the load.
-  useEffect(() => {
-    if (selectedProjectId === null) {
-      setHistory([])
-      historyRef.current = []
-      historyProjectIdRef.current = null
-      historyFileIdRef.current = null
-      loadedHistoryProjectRef.current = null
-      return
-    }
-    if (loadedHistoryProjectRef.current === selectedProjectId) return
-    const file = (versionsByProject[selectedProjectId] ?? []).find(isHistoryFile)
-    historyProjectIdRef.current = selectedProjectId
-    historyFileIdRef.current = file?.id ?? null
-    if (file === undefined) {
-      setHistory([])
-      historyRef.current = []
-      loadedHistoryProjectRef.current = selectedProjectId
-      return
-    }
-    let active = true
-    readFile(file)
-      .then((text) => {
-        if (!active) return
-        const snaps = parseHistory(text)
-        setHistory(snaps)
-        historyRef.current = snaps
-        loadedHistoryProjectRef.current = selectedProjectId
-      })
-      .catch((err) => {
-        console.error('[history] read failed:', err)
-        if (!active) return
-        setHistory([])
-        historyRef.current = []
-        loadedHistoryProjectRef.current = selectedProjectId
-      })
-    return () => {
-      active = false
-    }
-  }, [selectedProjectId, versionsByProject])
-
   // Load the selected project's notes (a single notes.json for all versions).
   // Like history, only re-reads when the project actually changes, so a
   // versionsByProject refresh (e.g. right after we create notes.json) doesn't
@@ -739,6 +673,60 @@ export default function App() {
   }
 
   /**
+   * Show what a draft changed, against the draft immediately before it.
+   *
+   * Both texts are fetched rather than diffed from what's in hand: only the
+   * open draft's text is loaded, and the head draft may not be the open one.
+   * The open draft is the exception — it uses the live editor text, so a
+   * comparison reflects what's on screen rather than the last save.
+   */
+  function showChanges(versionId: string) {
+    const index = versions.findIndex((v) => v.file.id === versionId)
+    const head = versions[index]
+    const base = versions[index + 1] // versions are newest-first
+    if (head === undefined || base === undefined) return
+
+    setComparingId(versionId)
+    setCompanion('changes')
+    setComparison({
+      baseLabel: base.label,
+      headLabel: head.label,
+      base: null,
+      head: null,
+      error: null,
+    })
+
+    const readDraft = async (file: DriveFile, id: string) =>
+      id === selectedVersionId ? sourceRef.current : await readFile(file)
+
+    void Promise.all([
+      readDraft(base.file, base.file.id),
+      readDraft(head.file, head.file.id),
+    ])
+      .then(([baseText, headText]) => {
+        // A second click while this was in flight wins; don't overwrite it.
+        setComparison((cur) =>
+          cur === null || cur.headLabel !== head.label
+            ? cur
+            : { ...cur, base: baseText, head: headText },
+        )
+      })
+      .catch((err) => {
+        console.error('[changes] read failed:', err)
+        setComparison((cur) =>
+          cur === null
+            ? cur
+            : {
+                ...cur,
+                error: `Couldn't load both drafts: ${
+                  err instanceof Error ? err.message : err
+                }`,
+              },
+        )
+      })
+  }
+
+  /**
    * Follow a reference back to the script: switch to the draft it was taken
    * from if that isn't the one open, then jump to its lines.
    *
@@ -761,6 +749,9 @@ export default function App() {
   // Choose what sits beside the editor. The switch in the top bar and the
   // palette's View commands both come through here.
   const chooseCompanion = (next: Companion) => {
+    // Leaving the diff drops the comparison with it: it's a specific question
+    // you asked about a specific draft, not a state to come back to.
+    if (next !== 'changes') setComparingId(null)
     setCompanion(next)
   }
   // ⇧⌘P swaps the pages in and out without disturbing a notes session: from
@@ -778,77 +769,6 @@ export default function App() {
   // Bumped to ask the preview to (re)fit the page to the pane — driven from the
   // top-bar options menu on mobile (where the preview has no Fit button).
   const [fitNonce, setFitNonce] = useState(0)
-
-  // Write the accumulated snapshots to the project's history.json (creating it
-  // the first time). Debounced and guarded so it only writes the project it was
-  // scheduled for, and never blocks editing.
-  async function flushHistory(projectId: string) {
-    historyWriteTimer.current = 0
-    if (!historyDirtyRef.current) return
-    if (historyProjectIdRef.current !== projectId) return
-    historyDirtyRef.current = false
-    const json = serializeHistory(historyRef.current)
-    try {
-      const fileId = historyFileIdRef.current
-      if (fileId !== null) {
-        await updateFileContent(fileId, json)
-      } else {
-        const created = await createFile(projectId, HISTORY_FILENAME, json)
-        historyFileIdRef.current = created.id
-        const refreshed = await listFiles(projectId)
-        setVersionsByProject((prev) => ({ ...prev, [projectId]: refreshed }))
-      }
-    } catch (err) {
-      console.error('[history] write failed:', err)
-      historyDirtyRef.current = true // retry on the next scheduled flush
-    }
-  }
-
-  // Record a snapshot of a version's text into the in-memory history and
-  // schedule a debounced write. No-ops (dedup/coalesce) don't schedule a write.
-  function recordSnapshot(versionId: string, text: string, kind: SnapshotKind) {
-    const projectId = historyProjectIdRef.current
-    if (projectId === null) return
-    const next = appendSnapshot(
-      historyRef.current,
-      makeSnapshot(versionId, text, kind, Date.now()),
-    )
-    if (next === historyRef.current) return // nothing changed
-    historyRef.current = next
-    setHistory(next)
-    historyDirtyRef.current = true
-    if (historyWriteTimer.current !== 0) {
-      clearTimeout(historyWriteTimer.current)
-    }
-    historyWriteTimer.current = window.setTimeout(
-      () => void flushHistory(projectId),
-      HISTORY_WRITE_DEBOUNCE_MS,
-    )
-  }
-
-  // Restore a snapshot's text into the open version. Non-destructive: the text
-  // that was current is snapshotted first (so it stays reachable — "forward"),
-  // then the chosen text is loaded, the editor remounted to show it, and it's
-  // written to the version file on Drive.
-  function restoreSnapshot(snap: HistorySnapshot) {
-    if (selectedVersionId === null || snap.versionId !== selectedVersionId) return
-    const versionId = selectedVersionId
-    if (snap.text === sourceRef.current) return // already showing this text
-    recordSnapshot(versionId, sourceRef.current, 'auto') // preserve current
-    setContent(snap.text)
-    contentRef.current = snap.text
-    setSource(snap.text)
-    sourceRef.current = snap.text
-    setEditorReloadNonce((n) => n + 1)
-    recordSnapshot(versionId, snap.text, 'restore')
-    void run('Restore', async () => {
-      await updateFileContent(versionId, snap.text)
-      changeCountRef.current = 0
-      lastSavedAtRef.current = Date.now()
-      setSavedAt(Date.now())
-      setSaveState('saved')
-    })
-  }
 
   // Background auto-save: on each edit, save immediately once enough changes
   // have piled up or too long has passed since the last save; otherwise save
@@ -899,8 +819,6 @@ export default function App() {
         lastSavedAtRef.current = Date.now()
         setSavedAt(Date.now())
         setSaveState('saved')
-        // Capture this saved text in the edit history (coalesced + capped).
-        recordSnapshot(versionId, text, 'auto')
       }
     } catch (err) {
       console.error('[drive] auto-save failed:', err)
@@ -936,16 +854,9 @@ export default function App() {
       setContent(null)
       contentRef.current = null
     }
-    // Leaving a project: write out any pending history and notes for it now,
-    // before the load effects repoint that state at the incoming project.
+    // Leaving a project: write out any pending notes for it now, before the
+    // load effects repoint that state at the incoming project.
     if (projectId !== selectedProjectId) {
-      if (historyProjectIdRef.current !== null) {
-        if (historyWriteTimer.current !== 0) {
-          clearTimeout(historyWriteTimer.current)
-          historyWriteTimer.current = 0
-        }
-        void flushHistory(historyProjectIdRef.current)
-      }
       if (notesProjectIdRef.current !== null) {
         if (notesWriteTimer.current !== 0) {
           clearTimeout(notesWriteTimer.current)
@@ -1135,9 +1046,9 @@ export default function App() {
     },
     {
       id: 'side-drafts',
-      label: 'Show drafts & history',
+      label: 'Show drafts',
       group: 'Sidebar',
-      keywords: 'versions revisions snapshots restore timeline',
+      keywords: 'versions revisions history changes diff compare',
       run: () => openSidebar('drafts'),
     },
     {
@@ -1239,12 +1150,7 @@ export default function App() {
             drafts={versions}
             pdfs={listPdfs(versionsByProject[selectedProjectId ?? ''] ?? [])}
             selectedVersionId={selectedVersionId}
-            snapshots={
-              selectedVersionId === null
-                ? []
-                : snapshotsForVersion(history, selectedVersionId)
-            }
-            currentText={source}
+            comparingId={comparingId}
             busy={busy}
             onSelectDraft={(id) =>
               selectedProjectId !== null && selectVersion(selectedProjectId, id)
@@ -1253,7 +1159,7 @@ export default function App() {
             onDeleteDraft={(id) =>
               selectedProjectId !== null && deleteVersion(selectedProjectId, id)
             }
-            onRestore={restoreSnapshot}
+            onShowChanges={showChanges}
           />
         ) : sidebarTab === 'outline' ? (
           <OutlinePanel
@@ -1344,7 +1250,7 @@ export default function App() {
               {(() => {
                 const editorNode = (
                   <Editor
-                    key={`${selectedVersionId}:${editorReloadNonce}`}
+                    key={selectedVersionId}
                     // Seeded from the live text, not the last-saved baseline.
                     // Collapsing or expanding a pane moves the editor between
                     // the split and the bare workspace, which remounts it — and
@@ -1444,6 +1350,27 @@ export default function App() {
                     {companion === 'notes' && paneFor('notes', notesNode)}
                   </>
                 )
+
+                // Changes takes the whole main area rather than sharing it.
+                // Two texts abreast need the width, and the editor beside them
+                // would be a third copy of the same material.
+                if (companion === 'changes') {
+                  return (
+                    <div className="companion">
+                      <ChangesView
+                        baseLabel={comparison?.baseLabel ?? ''}
+                        headLabel={comparison?.headLabel ?? ''}
+                        base={comparison?.base ?? null}
+                        head={comparison?.head ?? null}
+                        error={comparison?.error ?? null}
+                        onClose={() => {
+                          setComparingId(null)
+                          chooseCompanion('none')
+                        }}
+                      />
+                    </div>
+                  )
+                }
 
                 // Phones have no room for two panes, so the companion takes
                 // the screen instead of half of it. Same value either way —

@@ -25,6 +25,15 @@
   --divider: var(--border);
   --divider-hover: var(--accent);
 
+  /* Diff. Tinted backgrounds rather than coloured text, so a changed line is
+     legible at a glance without the screenplay itself turning red and green. */
+  --diff-add-bg: #e4f3e6;
+  --diff-add-num: #4b7a52;
+  --diff-del-bg: #fbe6e8;
+  --diff-del-num: #9a5257;
+  --diff-hunk-bg: #e2e7ef;
+  --diff-hunk-text: #5b6472;
+
   color-scheme: light;
 
   font-family: 'Merriweather', Georgia, 'Times New Roman', serif;
@@ -44,6 +53,15 @@
   --accent: #c47a4a;
   --accent-soft: #e0a877;
   --on-accent: #ffffff;
+
+  /* Darker, desaturated tints: at full saturation these glow against the dark
+     page and pull the eye off the text they're meant to be marking. */
+  --diff-add-bg: #1d2f22;
+  --diff-add-num: #7fae86;
+  --diff-del-bg: #35201f;
+  --diff-del-num: #c08a8a;
+  --diff-hunk-bg: #23272e;
+  --diff-hunk-text: #8b93a1;
 
   color-scheme: dark;
 }

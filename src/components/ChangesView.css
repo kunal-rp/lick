@@ -1,0 +1,216 @@
+.changes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.changes__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+
+.changes__title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.changes__draft {
+  font-weight: 700;
+}
+
+.changes__arrow {
+  color: var(--text-faint);
+}
+
+.changes__summary {
+  display: inline-flex;
+  gap: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.changes__add {
+  color: var(--diff-add-num);
+}
+
+.changes__del {
+  color: var(--diff-del-num);
+}
+
+.changes__none {
+  color: var(--text-faint);
+}
+
+.changes__spacer {
+  flex: 1 1 auto;
+}
+
+.changes__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.changes__close svg {
+  width: 15px;
+  height: 15px;
+}
+
+.changes__close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.changes__message {
+  margin: 0;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.changes__message--error {
+  color: var(--diff-del-num);
+}
+
+.changes__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/*
+ * Four tracks: a number and its text for each side. `1fr` on the text columns
+ * splits the width evenly and `min-width: 0` lets them wrap, so a long line of
+ * action never forces the whole grid to scroll sideways and knock the two
+ * halves out of alignment.
+ */
+.changes__grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  font-family: 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.changes__row {
+  display: contents;
+}
+
+.changes__hunk {
+  grid-column: 1 / -1;
+  padding: 4px 12px;
+  background: var(--diff-hunk-bg);
+  color: var(--diff-hunk-text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.changes__num {
+  padding: 0 8px;
+  min-width: 4ch;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.changes__cell {
+  min-width: 0;
+  padding: 0 10px 0 4px;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A rule between the halves, so the eye knows where one text ends. */
+.changes__row .changes__num:nth-child(3) {
+  border-left: 1px solid var(--border);
+}
+
+/*
+ * A deletion tints the left, an addition tints the right, and an edit tints
+ * both — which is what makes an edited line read as one change rather than as
+ * an unrelated removal and insertion that happen to be adjacent.
+ */
+.changes__row--del .changes__num:nth-child(1),
+.changes__row--del .changes__cell--left,
+.changes__row--mod .changes__num:nth-child(1),
+.changes__row--mod .changes__cell--left {
+  background: var(--diff-del-bg);
+}
+
+.changes__row--add .changes__num:nth-child(3),
+.changes__row--add .changes__cell--right,
+.changes__row--mod .changes__num:nth-child(3),
+.changes__row--mod .changes__cell--right {
+  background: var(--diff-add-bg);
+}
+
+.changes__row--del .changes__num:nth-child(1),
+.changes__row--mod .changes__num:nth-child(1) {
+  color: var(--diff-del-num);
+}
+
+.changes__row--add .changes__num:nth-child(3),
+.changes__row--mod .changes__num:nth-child(3) {
+  color: var(--diff-add-num);
+}
+
+/* The empty half of a pure add/delete still needs its tint, or the row reads
+   as half-finished rather than as "nothing was here". */
+.changes__row--del .changes__num:nth-child(3),
+.changes__row--del .changes__cell--right,
+.changes__row--add .changes__num:nth-child(1),
+.changes__row--add .changes__cell--left {
+  background: var(--raised);
+}
+
+@media (max-width: 768px) {
+  /*
+   * Two texts abreast don't fit a phone, so the grid collapses to one column
+   * and each row's halves stack: the old line, then the new one under it.
+   */
+  .changes__grid {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .changes__row .changes__num:nth-child(3) {
+    border-left: none;
+  }
+
+  /* The blank half of a pure add or delete has nothing to say once it isn't
+     holding a column open. */
+  .changes__row--del .changes__cell--right,
+  .changes__row--del .changes__num:nth-child(3),
+  .changes__row--add .changes__cell--left,
+  .changes__row--add .changes__num:nth-child(1) {
+    display: none;
+  }
+
+  /* An unchanged line is the same on both sides. Abreast that reads as one
+     line; stacked it would read as the line repeating itself. */
+  .changes__row--ctx .changes__num:nth-child(3),
+  .changes__row--ctx .changes__cell--right {
+    display: none;
+  }
+}

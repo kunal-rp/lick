@@ -1,5 +1,4 @@
 import type { DriveFile } from './files'
-import { HISTORY_FILENAME } from '../history'
 import { NOTES_FILENAME, NOTE_ASSET_PREFIX } from '../notes'
 
 // Versions are files named `<project name>_v<N>.fountain` inside a project
@@ -43,9 +42,15 @@ function isLegacyCommentsFile(file: DriveFile): boolean {
   return file.name === LEGACY_COMMENTS_FILENAME
 }
 
-/** Whether a file is the project's edit-history store (data, not a version). */
-export function isHistoryFile(file: DriveFile): boolean {
-  return file.name === HISTORY_FILENAME
+/**
+ * A project's legacy edit-history store. Automatic snapshots were replaced by
+ * per-draft comparison; like the old comments file this is left alone on Drive
+ * rather than deleted, and just kept out of the draft list.
+ */
+const LEGACY_HISTORY_FILENAME = 'history.json'
+
+function isLegacyHistoryFile(file: DriveFile): boolean {
+  return file.name === LEGACY_HISTORY_FILENAME
 }
 
 /** Whether a file is the project's notes store (data, not a version). */
@@ -63,7 +68,7 @@ function isVersionFile(file: DriveFile): boolean {
   return (
     !isPdf(file) &&
     !isLegacyCommentsFile(file) &&
-    !isHistoryFile(file) &&
+    !isLegacyHistoryFile(file) &&
     !isNotesFile(file) &&
     !isNoteAssetFile(file)
   )

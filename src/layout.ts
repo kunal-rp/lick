@@ -22,12 +22,18 @@ export type SidebarTab = 'files' | 'drafts' | 'outline' | 'cast'
  *
  * One value rather than a boolean per panel: the slot holds one thing, so the
  * state can't express a combination the layout can't render. The control for
- * it is a segmented switch listing all three — including the full-width
- * option, which is the part the earlier pane toggles got wrong. There,
- * collapsing the pane meant clicking whichever tab was already active: a
- * hidden behaviour of the selected item rather than a choice you could see.
+ * it is a segmented switch listing the options — including the full-width
+ * one, which is the part the earlier pane toggles got wrong. There, collapsing
+ * the pane meant clicking whichever tab was already active: a hidden behaviour
+ * of the selected item rather than a choice you could see.
+ *
+ * 'changes' is the odd one: it takes the whole main area rather than sharing
+ * it. Reviewing a diff means reading two texts abreast, which needs the width,
+ * and the editor would be showing a third copy of the same material. It isn't
+ * on the switch — you get there from a draft in the sidebar, and leaving it
+ * puts you back in the editor.
  */
-export type Companion = 'none' | 'preview' | 'notes'
+export type Companion = 'none' | 'preview' | 'notes' | 'changes'
 
 export interface LayoutPrefs {
   /** Whether the left sidebar is collapsed to its icon rail. */
@@ -121,6 +127,8 @@ export function loadLayout(): LayoutPrefs {
             ? parsed.sidebarTab
             : DEFAULTS.sidebarTab,
         companion:
+          // 'changes' is deliberately not restored: it's a place you go to
+          // read a specific comparison, not a layout to come back to.
           parsed.companion === 'none' ||
           parsed.companion === 'preview' ||
           parsed.companion === 'notes'

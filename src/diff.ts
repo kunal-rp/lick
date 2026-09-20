@@ -58,45 +58,6 @@ export function diffLines(from: string, to: string): DiffLine[] {
   return out
 }
 
-/** A collapsed run of unchanged lines, standing in for `count` context lines. */
-export interface DiffGap {
-  op: 'gap'
-  count: number
-}
-
-export type DiffRow = DiffLine | DiffGap
-
-/**
- * Drop unchanged lines that are far from any change, keeping `context` lines on
- * each side of every add/del. Collapsed runs become a single gap row, so the
- * output shows just the changes (plus a little orientation) instead of the
- * whole document. Short runs (≤ context*2) are left inline rather than gapped.
- */
-export function collapseUnchanged(lines: DiffLine[], context = 2): DiffRow[] {
-  const keep = new Array<boolean>(lines.length).fill(false)
-  lines.forEach((line, i) => {
-    if (line.op === 'ctx') return
-    const lo = Math.max(0, i - context)
-    const hi = Math.min(lines.length - 1, i + context)
-    for (let j = lo; j <= hi; j++) keep[j] = true
-  })
-
-  const rows: DiffRow[] = []
-  let i = 0
-  while (i < lines.length) {
-    if (keep[i]) {
-      rows.push(lines[i])
-      i++
-      continue
-    }
-    let j = i
-    while (j < lines.length && !keep[j]) j++
-    rows.push({ op: 'gap', count: j - i })
-    i = j
-  }
-  return rows
-}
-
 /** Count of added/removed lines between `from` and `to`. */
 export function diffSummary(from: string, to: string): DiffSummary {
   if (from === to) return { added: 0, removed: 0 }
@@ -107,4 +68,125 @@ export function diffSummary(from: string, to: string): DiffSummary {
     else if (line.op === 'del') removed++
   }
   return { added, removed }
+}
+
+// --- Side-by-side ---------------------------------------------------------
+//
+// The flat list above reads as a patch: one column, deletions and additions
+// stacked. Reviewing what a draft changed is easier with the two texts abreast
+// — old on the left, new on the right, a changed line sitting opposite the line
+// it replaced — which is what every review tool shows and what this builds.
+
+/** One side of a row: a line number and text, or blank where the row has none. */
+export interface SideCell {
+  num: number | null
+  text: string | null
+}
+
+export type SideRowKind = 'ctx' | 'add' | 'del' | 'mod' | 'hunk'
+
+export interface SideRow {
+  kind: SideRowKind
+  left: SideCell
+  right: SideCell
+  /** For `hunk`: the `@@ -a,b +c,d @@` header introducing the next run. */
+  header?: string
+}
+
+const BLANK: SideCell = { num: null, text: null }
+
+/**
+ * Pair a flat diff into rows, numbering each side as it goes.
+ *
+ * Within a run of changes the k-th deletion is put opposite the k-th addition,
+ * so a line that was edited reads as one row with before and after rather than
+ * as two rows several apart. Runs of unequal length leave the shorter side
+ * blank for the remainder.
+ */
+function pairRows(flat: DiffLine[]): SideRow[] {
+  const rows: SideRow[] = []
+  let leftNo = 0
+  let rightNo = 0
+  let i = 0
+
+  while (i < flat.length) {
+    if (flat[i].op === 'ctx') {
+      leftNo++
+      rightNo++
+      const text = flat[i].text
+      rows.push({
+        kind: 'ctx',
+        left: { num: leftNo, text },
+        right: { num: rightNo, text },
+      })
+      i++
+      continue
+    }
+
+    // The whole changed run, however its deletions and additions interleave.
+    const dels: string[] = []
+    const adds: string[] = []
+    while (i < flat.length && flat[i].op !== 'ctx') {
+      if (flat[i].op === 'del') dels.push(flat[i].text)
+      else adds.push(flat[i].text)
+      i++
+    }
+
+    for (let k = 0; k < Math.max(dels.length, adds.length); k++) {
+      const del = k < dels.length ? dels[k] : null
+      const add = k < adds.length ? adds[k] : null
+      if (del !== null) leftNo++
+      if (add !== null) rightNo++
+      rows.push({
+        kind: del !== null && add !== null ? 'mod' : del !== null ? 'del' : 'add',
+        left: del !== null ? { num: leftNo, text: del } : BLANK,
+        right: add !== null ? { num: rightNo, text: add } : BLANK,
+      })
+    }
+  }
+
+  return rows
+}
+
+/** `@@ -a,b +c,d @@` for one run of rows, in the usual unified-diff form. */
+function hunkHeader(rows: SideRow[]): string {
+  const lefts = rows.map((r) => r.left.num).filter((n): n is number => n !== null)
+  const rights = rows.map((r) => r.right.num).filter((n): n is number => n !== null)
+  const part = (nums: number[], sign: string) =>
+    `${sign}${nums[0] ?? 0},${nums.length}`
+  return `@@ ${part(lefts, '-')} ${part(rights, '+')} @@`
+}
+
+/**
+ * Build a side-by-side diff of `from` → `to`, showing each run of changes with
+ * `context` unchanged lines around it and a hunk header above it. Stretches of
+ * untouched text between runs are dropped entirely — a draft's changes are the
+ * point, not the 90 pages that didn't move.
+ */
+export function sideBySide(from: string, to: string, context = 3): SideRow[] {
+  const rows = pairRows(diffLines(from, to))
+
+  const keep = new Array<boolean>(rows.length).fill(false)
+  rows.forEach((row, i) => {
+    if (row.kind === 'ctx') return
+    const lo = Math.max(0, i - context)
+    const hi = Math.min(rows.length - 1, i + context)
+    for (let j = lo; j <= hi; j++) keep[j] = true
+  })
+
+  const out: SideRow[] = []
+  let i = 0
+  while (i < rows.length) {
+    if (!keep[i]) {
+      i++
+      continue
+    }
+    let j = i
+    while (j < rows.length && keep[j]) j++
+    const run = rows.slice(i, j)
+    out.push({ kind: 'hunk', left: BLANK, right: BLANK, header: hunkHeader(run) })
+    out.push(...run)
+    i = j
+  }
+  return out
 }
