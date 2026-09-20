@@ -35,20 +35,18 @@
   background: var(--pv-panel);
   border-bottom: 1px solid var(--pv-border);
   user-select: none;
-}
-
-/* Current magnification, as a read-out. The slider that used to sit beside it
+}/* Current magnification, as a read-out. The slider that used to sit beside it
    is gone: the wheel and the pinch already set zoom, and Fit is the way back. */
+
 .preview__zoom-value {
   font-size: 12px;
   color: var(--pv-text-muted);
   min-width: 4ch;
   font-variant-numeric: tabular-nums;
-}
-
-/* Shared button language across the preview chrome: matches the app's toolbar
+}/* Shared button language across the preview chrome: matches the app's toolbar
    buttons (radius, transitions, muted → text on hover, accent when active),
    just drawn in the preview's fixed constants. */
+
 .preview__zoom-fit,
 .preview__sections-toggle {
   padding: 4px 12px;
@@ -75,13 +73,12 @@
   background: var(--pv-accent);
   border-color: var(--pv-accent);
   color: var(--pv-on-accent);
-}
-
-/* Section-range tint: colored bands painted behind the script text, filling
+}/* Section-range tint: colored bands painted behind the script text, filling
    the full sheet width and reaching the page's top/bottom edges. The layer sits
    at a negative z-index within the page's own stacking context (see the
    `isolation` on .preview__page), so it covers the white sheet but never the
    text — and adds no box to the flow, so nothing shifts. */
+
 .preview__section-bg {
   position: absolute;
   inset: 0;
@@ -94,11 +91,10 @@
   left: 0;
   right: 0;
   background: color-mix(in srgb, var(--section-color) 15%, #fff);
-}
-
-/* Sticky section labels. The overlay is a direct child of .preview__scroll (not
+}/* Sticky section labels. The overlay is a direct child of .preview__scroll (not
    the zoom-transformed pages), so the pills can stick to the top of the scroll
    viewport. Tracks span each section's on-screen extent; the pill inside sticks. */
+
 .preview__section-sticky {
   position: absolute;
   top: 0;
@@ -110,13 +106,12 @@
 
 .preview__section-label-track {
   position: absolute;
-}
-
-/* Pill matches the editor's section label (see Editor.css); tuned for the
+}/* Pill matches the editor's section label (see Editor.css); tuned for the
    always-light preview sheet, and carries the description alongside the name.
    The track's left edge sits at the text column, so the pill is shifted fully
    left of that line — it lives in the page's left margin and the gutter beside
    the sheet, never over the script text. */
+
 .preview__section-label {
   position: sticky;
   top: 12px;
@@ -145,21 +140,19 @@
   color: #555;
   font-size: 11px;
   line-height: 1.35;
-}
-
-/* "Back to editor" control + "Preview" mode label + spacer — rendered by
+}/* "Back to editor" control + "Preview" mode label + spacer — rendered by
    Preview only on a phone, where the editor and preview are full-screen toggles.
    Hidden on desktop, where the toolbar carries the zoom/section controls. */
+
 .preview__edit,
 .preview__mode-label,
 .preview__mode-spacer {
   display: none;
-}
-
-/* Mobile: the zoom slider drops out (the page auto-fits and pinch-zooms), but
+}/* Mobile: the zoom slider drops out (the page auto-fits and pinch-zooms), but
    the toolbar keeps its panel options — Fit and Sections — as touch buttons.
    Layout mirrors the version bar: the "Edit" back-button and "Preview" title on
    the left, the panel actions pushed to the right by a flexible spacer. */
+
 @media (max-width: 768px) {
   /* Mobile has no toolbar controls (zoom via pinch/auto-fit; Fit + Sections
      moved to the top-bar options menu), so drop the otherwise-empty bar. */
@@ -191,37 +184,27 @@
   .preview__scroll {
     padding: 12px;
   }
-}
-
-/* Frame that reserves the on-screen (scaled) size of the sheets and centres
+}/* Frame that reserves the on-screen (scaled) size of the sheets and centres
    them; JS sets its width/height since `transform` doesn't resize the box. */
+
 .preview__pages-frame {
   margin: 0 auto;
-}
-
-/* Scales the rendered sheets only (the measurer lives outside this wrapper).
+}/* Scales the rendered sheets only (the measurer lives outside this wrapper).
    `transform` — not `zoom` — because fractional `zoom` overlaps text on iOS
    Safari. `transform-origin: top left` keeps the scaled box aligned with the
    frame's corner so the frame's computed size matches exactly. */
+
 .preview__pages {
   width: 8.5in;
   transform: scale(var(--preview-zoom, 1));
   transform-origin: top left;
-}
+}/* Persisted preview selection — kept visible after the editor takes focus. */
 
-/* Persisted preview selection — kept visible after the editor takes focus. */
 ::highlight(preview-selection) {
   background: #ffe08a;
   color: #1a1a1a;
-}
+}/* Brief flash when the editor reveals a line in the preview. */
 
-/* Commented text — a light accent, deliberately distinct from the selection. */
-::highlight(comments) {
-  background: rgba(160, 100, 58, 0.25);
-  color: #1a1a1a;
-}
-
-/* Brief flash when the editor reveals a line in the preview. */
 .el--reveal {
   animation: preview-reveal 1.2s ease;
   border-radius: 2px;
@@ -243,9 +226,8 @@
   flex: 1 1 auto;
   display: flex;
   min-height: 0;
-}
+}/* Fixed-size pages that scroll/centre — never reflow — as the pane resizes. */
 
-/* Fixed-size pages that scroll/centre — never reflow — as the pane resizes. */
 .preview__scroll {
   position: relative;
   flex: 1 1 auto;
@@ -254,103 +236,7 @@
   padding: 24px;
   /* Reserve pinch for our own zoom handler (panning still scrolls). */
   touch-action: pan-x pan-y;
-}
-
-/* Comment overlay: a child of the scroll element (so it scrolls with the pages
-   and its coordinates match scroll content), outside the zoom transform. Markers
-   are positioned absolutely in the page's right margin by the placement effect. */
-.preview__comments {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 3;
-  pointer-events: none;
-}
-
-/* A marker's anchor point, at the commented line in the right margin. */
-.preview__comment-anchor {
-  position: absolute;
-  pointer-events: auto;
-}
-
-/* Collapsed marker: a mini card (same palette as the expanded card) carrying
-   the author avatar and, when a line has several comments, their count. */
-.preview__comment-marker {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 4px;
-  border: 1px solid #383838;
-  border-radius: 6px 6px 6px 2px;
-  background: #262626;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-}
-
-.preview__comment-marker:hover {
-  border-color: #4a4a4a;
-  background: #2e2e2e;
-}
-
-.preview__comment-marker--open {
-  border-color: #c47a4a;
-  outline: 1px solid #c47a4a;
-}
-
-.preview__comment-marker--broken {
-  border-color: #7a5a2a;
-}
-
-.preview__comment-count {
-  padding-right: 2px;
-  color: #ddd;
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Popover: floats to the left of the marker, over the page, at a readable
-   width. Holds one card, or every comment that shares the marker's line. */
-.preview__comment-pop {
-  position: absolute;
-  top: 0;
-  right: calc(100% + 8px);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 260px;
-  max-height: 70vh;
-  overflow-y: auto;
-  z-index: 6;
-}
-
-/* Floating "add comment" button in the right margin of the page area. */
-.preview__comment-add {
-  position: absolute;
-  right: 10px;
-  z-index: 5;
-  padding: 4px 10px;
-  border: 1px solid #a0643a;
-  border-radius: 14px;
-  background: #2a2a2a;
-  color: #e0b48c;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-.preview__comment-add:hover {
-  background: #a0643a;
-  color: #fff;
-}
-
-/*
+}/*
  * True US screenplay geometry, in real units. At 12pt Courier the font's own
  * metrics fall exactly on the spec grid — 10 characters/inch horizontally
  * (1 char = 0.1") and 6 lines/inch vertically (line-height 1 = 1/6"):
@@ -358,6 +244,7 @@
  *   margins   left 1.5"   right 1"   top 1"   bottom 1"
  *   text area 6.0" wide (60 chars)   9" tall (54 lines)
  */
+
 .preview__page,
 .preview__measure {
   font-family: 'Courier New', Courier, monospace;
@@ -386,9 +273,8 @@
   right: 1in; /* flush with the right text margin */
   font-size: inherit;
   color: #1a1a1a;
-}
+}/* Title page: title block centered, contact/date lower-left. */
 
-/* Title page: title block centered, contact/date lower-left. */
 .preview__title {
   display: flex;
   flex-direction: column;
@@ -413,9 +299,8 @@
 }
 .title__field:last-child {
   margin-bottom: 0;
-}
+}/* Content width only (6"); no page padding. Off-screen but laid out. */
 
-/* Content width only (6"); no page padding. Off-screen but laid out. */
 .preview__measure {
   position: absolute;
   top: 0;
@@ -430,21 +315,19 @@
   color: #999;
   font-style: italic;
   text-align: center;
-}
-
-/*
+}/*
  * Element indents, measured from the text-area (content) left edge, i.e. the
  * standard position minus the 1.5" left margin:
  *   character 3.7" -> 2.2"     parenthetical 3.1" -> 1.6"
  *   dialogue  2.5" -> 1.0" left, right edge 6.0" -> 1.5" from content right
  */
+
 .el {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: break-word;
-}
+}/* One blank line before each new block; none within a dialogue block. */
 
-/* One blank line before each new block; none within a dialogue block. */
 .el--scene_heading,
 .el--action,
 .el--transition,
@@ -491,9 +374,8 @@
 .el--lyrics {
   margin-left: 1in;
   font-style: italic;
-}
+}/* Dual dialogue: two side-by-side columns spanning the text area. */
 
-/* Dual dialogue: two side-by-side columns spanning the text area. */
 .el--dual {
   display: flex;
   gap: 0.5in;
@@ -503,9 +385,8 @@
 .el--dual-col {
   flex: 1 1 0;
   min-width: 0;
-}
+}/* Column-local formatting: the full-width indents don't apply inside a column. */
 
-/* Column-local formatting: the full-width indents don't apply inside a column. */
 .el--dual .el {
   margin: 0;
 }

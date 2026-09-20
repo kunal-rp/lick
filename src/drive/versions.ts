@@ -1,5 +1,4 @@
 import type { DriveFile } from './files'
-import { COMMENTS_FILENAME } from '../comments'
 import { HISTORY_FILENAME } from '../history'
 import { NOTES_FILENAME, NOTE_ASSET_PREFIX } from '../notes'
 
@@ -31,9 +30,17 @@ export function isPdf(file: DriveFile): boolean {
   return file.mimeType === 'application/pdf' || /\.pdf$/i.test(file.name)
 }
 
-/** Whether a file is the project's comments store (data, not a version). */
-export function isCommentsFile(file: DriveFile): boolean {
-  return file.name === COMMENTS_FILENAME
+/**
+ * A project's legacy comments store. Commenting was removed in favour of
+ * referencing script lines from a note, but the file is left alone on Drive
+ * rather than deleted — it's the user's data, and if they open the folder they
+ * should find it where they left it. It just has to keep being excluded from
+ * the draft list so it never shows up as something to open.
+ */
+const LEGACY_COMMENTS_FILENAME = 'comments.json'
+
+function isLegacyCommentsFile(file: DriveFile): boolean {
+  return file.name === LEGACY_COMMENTS_FILENAME
 }
 
 /** Whether a file is the project's edit-history store (data, not a version). */
@@ -55,7 +62,7 @@ export function isNoteAssetFile(file: DriveFile): boolean {
 function isVersionFile(file: DriveFile): boolean {
   return (
     !isPdf(file) &&
-    !isCommentsFile(file) &&
+    !isLegacyCommentsFile(file) &&
     !isHistoryFile(file) &&
     !isNotesFile(file) &&
     !isNoteAssetFile(file)

@@ -9,8 +9,6 @@ import {
 import type { CSSProperties } from 'react'
 import { parse, renderEmphasis, CONTD_SUFFIX, type Section } from '../fountain'
 import { LINES_PER_PAGE } from '../pagination'
-import { CommentAvatar, CommentCard, CommentCompose } from './CommentsRail'
-import type { Comment, CommentAnchor } from '../comments'
 import { useIsMobile } from '../useIsMobile'
 import './Preview.css'
 
@@ -37,50 +35,12 @@ interface PreviewProps {
    * off-stage box, and it re-fits each time it comes back into view.
    */
   active?: boolean
-  /** Comments anchored to the version currently shown. */
-  comments?: Comment[]
-  /** The version id to anchor new comments to (null hides commenting). */
-  versionId?: string | null
-  /** Display name for comments with no explicit author. */
-  authorName?: string
-  onAddComment?: (anchor: CommentAnchor, text: string) => void
-  onEditComment?: (id: string, text: string) => void
-  onDeleteComment?: (id: string) => void
-}
-
-// Character offset of (node, nodeOffset) within root's flattened text, or the
-// total length if the node isn't inside root.
-function offsetWithin(root: HTMLElement, node: Node, nodeOffset: number): number {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  let acc = 0
-  for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
-    if (n === node) return acc + nodeOffset
-    acc += n.nodeValue?.length ?? 0
-  }
-  return acc
-}
-
-// {text node, local offset} for an absolute offset within root's text.
-function pointAt(
-  root: HTMLElement,
-  target: number,
-): { node: Node; offset: number } | null {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  let acc = 0
-  for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
-    const len = n.nodeValue?.length ?? 0
-    if (target <= acc + len) return { node: n, offset: target - acc }
-    acc += len
-  }
-  return null
-}
-
-// Strip all whitespace for quote comparison. A stored quote comes from
-// Selection.toString() (which inserts line breaks at block boundaries) while a
-// reconstructed range uses Range.toString() (which does not), so any
-// whitespace-sensitive compare would spuriously differ on multi-element quotes.
-function normalizeQuote(s: string): string {
-  return s.replace(/\s+/g, '')
+  /** Reports a selected span of the script, for referencing it from a note. */
+  onSelectRange?: (range: {
+    startLine: number
+    endLine: number
+    quote: string
+  }) => void
 }
 
 // Preview magnification bounds, as percentages.
@@ -142,12 +102,7 @@ export function Preview({
   onToggleSections,
   fitNonce = 0,
   active = true,
-  comments = [],
-  versionId = null,
-  authorName = 'You',
-  onAddComment,
-  onEditComment,
-  onDeleteComment,
+  onSelectRange,
 }: PreviewProps) {
   const isMobile = useIsMobile()
   const screenplay = useMemo(() => parse(source), [source])
@@ -192,43 +147,6 @@ export function Preview({
     for (const s of sections) map.set(s.id, s)
     return map
   }, [sections])
-
-  // A selection awaiting a comment: its anchor + vertical position for the
-  // floating "+ Comment" button. Cleared once composing or dismissed.
-  const [pending, setPending] = useState<{
-    anchor: CommentAnchor
-    top: number
-  } | null>(null)
-  // The anchor currently being composed (compose box open in the rail).
-  const [composeAnchor, setComposeAnchor] = useState<CommentAnchor | null>(null)
-  // Ids of comments whose anchor no longer resolves in the current text.
-  const [brokenIds, setBrokenIds] = useState<Set<string>>(new Set())
-  // A comment to scroll to + flash (e.g. selecting its text in the page).
-  const [commentFocus, setCommentFocus] = useState<{
-    id: string
-    nonce: number
-  } | null>(null)
-
-  const commentingEnabled = versionId !== null && onAddComment !== undefined
-  // Comments render in a gutter beside the page; on phones there's no room, so
-  // they're desktop-only.
-  const showMarginComments = commentingEnabled && !isMobile
-
-  // Comment markers, in scroll-content coordinates (the overlay lives outside
-  // the pages' zoom transform). One marker per line that has comments, placed in
-  // the page's right margin at that line and pushed down just enough to never
-  // overlap the marker above. Each expands into a popover card on click.
-  const commentsRef = useRef<HTMLDivElement>(null)
-  const [commentMarkers, setCommentMarkers] = useState<
-    { key: string; top: number; left: number; comments: Comment[] }[]
-  >([])
-  const [composePos, setComposePos] = useState<{ top: number; left: number } | null>(
-    null,
-  )
-  // The line-key of the marker whose popover is open, or null when collapsed.
-  const [expandedKey, setExpandedKey] = useState<string | null>(null)
-  // The comment currently flashed (briefly highlighted), cleared on a timer.
-  const [flashId, setFlashId] = useState<string | null>(null)
 
   useLayoutEffect(() => {
     const container = measureRef.current
@@ -452,109 +370,6 @@ export function Preview({
     return () => ro.disconnect()
   }, [placeLabels, showSections])
 
-  // Place a comment marker in the page's right margin at each commented line.
-  // Markers are measured in scroll-content coordinates (like the sticky section
-  // labels); comments sharing a line collapse into one marker, and a top-down
-  // pass pushes any marker down just enough to clear the one above it.
-  const MARKER_SIZE = 22
-  const MARKER_GAP = 6
-  const placeComments = useCallback(() => {
-    const scroll = scrollRef.current
-    const pagesEl = pagesRef.current
-    if (scroll === null || pagesEl === null || !showMarginComments) {
-      setCommentMarkers([])
-      setComposePos(null)
-      return
-    }
-    const scrollRect = scroll.getBoundingClientRect()
-    const firstPage = pagesEl.querySelector('.preview__page')
-    if (!(firstPage instanceof HTMLElement)) return
-    const pageRect = firstPage.getBoundingClientRect()
-    const pageLeft = pageRect.left - scrollRect.left + scroll.scrollLeft
-    // The right margin starts at 7.5/8.5 of the page width (1.5in left margin +
-    // 6in text column). Sit the marker just inside it.
-    const markerLeft = pageLeft + pageRect.width * (7.5 / 8.5) + 6
-
-    const anchorTop = (line: number): number | null => {
-      const el = pagesEl.querySelector(`.el[data-line="${line}"]`)
-      if (!(el instanceof HTMLElement)) return null
-      return el.getBoundingClientRect().top - scrollRect.top + scroll.scrollTop
-    }
-
-    // One marker per commented line; comments on the same line ride together.
-    const groups = new Map<number, Comment[]>()
-    for (const c of comments) {
-      const arr = groups.get(c.startLine)
-      if (arr === undefined) groups.set(c.startLine, [c])
-      else arr.push(c)
-    }
-    const placed = [...groups.entries()]
-      .map(([line, cs]) => ({ line, cs, anchor: anchorTop(line) ?? 0 }))
-      .sort((a, b) => a.anchor - b.anchor)
-
-    const markers: { key: string; top: number; left: number; comments: Comment[] }[] =
-      []
-    let prevBottom = -Infinity
-    for (const g of placed) {
-      const top = Math.max(g.anchor, prevBottom + MARKER_GAP)
-      markers.push({ key: String(g.line), top, left: markerLeft, comments: g.cs })
-      prevBottom = top + MARKER_SIZE
-    }
-    setCommentMarkers(markers)
-    setComposePos(
-      composeAnchor !== null
-        ? { top: anchorTop(composeAnchor.startLine) ?? 0, left: markerLeft }
-        : null,
-    )
-  }, [comments, composeAnchor, showMarginComments])
-
-  // Coalesce re-placements (pane resize, layout change) into one per frame.
-  const placeRaf = useRef(0)
-  const schedulePlace = useCallback(() => {
-    if (placeRaf.current !== 0) return
-    placeRaf.current = requestAnimationFrame(() => {
-      placeRaf.current = 0
-      placeComments()
-    })
-  }, [placeComments])
-
-  // Re-place markers when the comments, the composed anchor, or the page layout
-  // (pagination / zoom) change.
-  useLayoutEffect(() => {
-    placeComments()
-  }, [placeComments, pages, zoom])
-
-  // Pane resize shifts the centered page (so the margin moves) without changing
-  // pagination — re-place on scroll-element resize.
-  useEffect(() => {
-    const scroll = scrollRef.current
-    if (scroll === null || !showMarginComments) return
-    const observer = new ResizeObserver(schedulePlace)
-    observer.observe(scroll)
-    return () => observer.disconnect()
-  }, [schedulePlace, showMarginComments])
-
-  // Collapse an open popover when clicking anywhere outside it or its marker.
-  useEffect(() => {
-    if (expandedKey === null) return
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node
-      const overlay = commentsRef.current
-      if (overlay !== null && overlay.contains(t)) return
-      setExpandedKey(null)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [expandedKey])
-
-  // Flash a comment card briefly when its text is selected in the page.
-  useEffect(() => {
-    if (commentFocus === null) return
-    setFlashId(commentFocus.id)
-    const timer = window.setTimeout(() => setFlashId(null), 1200)
-    return () => window.clearTimeout(timer)
-  }, [commentFocus])
-
   // Set once the user zooms by hand (wheel or pinch); the mobile auto-fit then
   // stops overriding their choice on the next resize.
   const userZoomedRef = useRef(false)
@@ -623,10 +438,9 @@ export function Preview({
     if (scroll === null) return
     const style = getComputedStyle(scroll)
     const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
-    // With comments in the margin, fit the whole sheet so the right-margin
-    // markers stay visible; otherwise fit just the text extent (through 7.5in),
+    // Fit the text extent (through 7.5in) rather than the whole sheet,
     // cropping the blank right margin to maximize legible size.
-    const extentPx = (showMarginComments ? 8.5 : 7.5) * 96
+    const extentPx = 7.5 * 96
     const available = scroll.clientWidth - padX
     // A pane that hasn't been laid out yet measures as zero (or, if the element
     // isn't in the document, as NaN via empty computed padding). Either way
@@ -635,7 +449,7 @@ export function Preview({
     if (!Number.isFinite(available) || available <= 0) return
     userZoomedRef.current = false // an explicit Fit re-enables mobile auto-fit
     setZoom(clampZoom(Math.floor((available / extentPx) * 100)))
-  }, [showMarginComments])
+  }, [])
 
   // Showing the preview re-fits it, every time.
   //
@@ -725,96 +539,6 @@ export function Preview({
     return () => observer.disconnect()
   }, [zoom, pages])
 
-  // A DOM Range for a comment's anchor, spanning from its start element to its
-  // end element (which may differ for a multi-line selection), or null if
-  // either element is missing.
-  const rangeForComment = (c: Comment): Range | null => {
-    const container = pagesRef.current
-    if (container === null) return null
-    const startEl = container.querySelector(`.el[data-line="${c.startLine}"]`)
-    const endEl = container.querySelector(`.el[data-line="${c.endLine}"]`)
-    if (!(startEl instanceof HTMLElement) || !(endEl instanceof HTMLElement)) {
-      return null
-    }
-    const a = pointAt(startEl, c.startOffset)
-    const b = pointAt(endEl, c.endOffset)
-    if (a === null || b === null) return null
-    try {
-      const range = document.createRange()
-      range.setStart(a.node, a.offset)
-      range.setEnd(b.node, b.offset)
-      return range
-    } catch {
-      return null
-    }
-  }
-
-  // Resolve each comment against the current text: valid comments get their
-  // range highlighted (a light accent, distinct from the selection); comments
-  // whose anchor no longer matches (element gone, or the quoted text changed)
-  // are recorded as broken so the rail can flag them.
-  useEffect(() => {
-    const container = pagesRef.current
-    // Before the first layout, there's nothing to resolve against — don't
-    // falsely mark everything broken.
-    if (container === null) return
-
-    const ranges: Range[] = []
-    const broken = new Set<string>()
-    for (const c of comments) {
-      const range = rangeForComment(c)
-      const ok =
-        range !== null &&
-        normalizeQuote(range.toString()) === normalizeQuote(c.quote)
-      if (ok && range !== null) ranges.push(range)
-      else broken.add(c.id)
-    }
-
-    const HighlightCtor = (window as unknown as { Highlight?: typeof Highlight })
-      .Highlight
-    const registry = (
-      CSS as unknown as { highlights?: Map<string, Highlight> }
-    ).highlights
-    if (HighlightCtor !== undefined && registry !== undefined) {
-      if (ranges.length > 0) registry.set('comments', new HighlightCtor(...ranges))
-      else registry.delete('comments')
-    }
-
-    setBrokenIds((prev) =>
-      prev.size === broken.size && [...broken].every((id) => prev.has(id))
-        ? prev
-        : broken,
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [comments, pages, source])
-
-  // The standard "insert comment" hotkey (⌘/Ctrl+Alt+M) opens the compose box
-  // for the pending selection.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (
-        (e.metaKey || e.ctrlKey) &&
-        e.altKey &&
-        e.key.toLowerCase() === 'm' &&
-        pending !== null
-      ) {
-        e.preventDefault()
-        setComposeAnchor(pending.anchor)
-        setPending(null)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [pending])
-
-  // Switching versions clears any in-progress comment affordances.
-  useEffect(() => {
-    setPending(null)
-    setComposeAnchor(null)
-    setCommentFocus(null)
-    setExpandedKey(null)
-  }, [versionId])
-
   // Editor double-click → scroll the preview to the element containing that
   // source line (the element whose start line is the greatest ≤ the line), and
   // briefly flash it.
@@ -842,17 +566,6 @@ export function Preview({
     const timer = window.setTimeout(() => el.classList.remove('el--reveal'), 1200)
     return () => window.clearTimeout(timer)
   }, [reveal])
-
-  // Scroll a comment's anchored text into view.
-  const focusComment = (c: Comment) => {
-    const el = pagesRef.current?.querySelector(`.el[data-line="${c.startLine}"]`)
-    const scroll = scrollRef.current
-    if (el instanceof HTMLElement && scroll !== null) {
-      const eRect = el.getBoundingClientRect()
-      const sRect = scroll.getBoundingClientRect()
-      scroll.scrollTop += eRect.top - sRect.top - scroll.clientHeight * 0.35
-    }
-  }
 
   const isEmpty = screenplay.elements.length === 0
 
@@ -893,13 +606,8 @@ export function Preview({
 
     const range = selection.getRangeAt(0)
     const startLine = Number(startEl.getAttribute('data-line'))
-    const startOffset = offsetWithin(
-      startEl,
-      range.startContainer,
-      range.startOffset,
-    )
     // The selection may end in a different element (a multi-line selection);
-    // anchor the end there rather than clamping to the start element.
+    // take the end line from there rather than clamping to the start element.
     const endNode = range.endContainer
     const endEl = (
       endNode instanceof Element ? endNode : (endNode?.parentElement ?? null)
@@ -908,10 +616,6 @@ export function Preview({
       endEl instanceof HTMLElement
         ? Number(endEl.getAttribute('data-line'))
         : startLine
-    const endOffset =
-      endEl instanceof HTMLElement
-        ? offsetWithin(endEl, range.endContainer, range.endOffset)
-        : (startEl.textContent ?? '').length
     const quote = selection.toString()
 
     // Persist the preview highlight independently of the native selection.
@@ -929,34 +633,11 @@ export function Preview({
 
     onJump?.(startLine)
 
-    // If the selection overlaps an existing comment, surface that comment.
-    const hit = comments.find((c) => {
-      const r = rangeForComment(c)
-      if (r === null) return false
-      return (
-        range.compareBoundaryPoints(Range.END_TO_START, r) < 0 &&
-        range.compareBoundaryPoints(Range.START_TO_END, r) > 0
-      )
-    })
-    if (hit !== undefined) {
-      // Open the marker for that line so the flashed card is actually visible.
-      setExpandedKey(String(hit.startLine))
-      setCommentFocus((f) => ({ id: hit.id, nonce: (f?.nonce ?? 0) + 1 }))
-    }
-
-    if (commentingEnabled && versionId !== null && quote.trim() !== '') {
-      const scroll = scrollRef.current
-      const top =
-        scroll !== null
-          ? range.getBoundingClientRect().top -
-            scroll.getBoundingClientRect().top +
-            scroll.scrollTop
-          : 0
-      setComposeAnchor(null)
-      setPending({
-        anchor: { versionId, startLine, startOffset, endLine, endOffset, quote },
-        top,
-      })
+    // Report the selected span so it can be referenced from a note. The lines
+    // are what a reference is anchored by; the quote is only a snapshot for
+    // display.
+    if (quote.trim() !== '') {
+      onSelectRange?.({ startLine, endLine, quote })
     }
   }
 
@@ -1177,100 +858,6 @@ export function Preview({
             </div>
           </div>
 
-          {/* Floating "add comment" button anchored to the current selection. */}
-          {commentingEnabled && pending !== null && composeAnchor === null && (
-            <button
-              type="button"
-              className="preview__comment-add"
-              style={{ top: pending.top }}
-              title="Add a comment (⌘/Ctrl+Alt+M)"
-              onClick={() => {
-                setComposeAnchor(pending.anchor)
-                setPending(null)
-              }}
-            >
-              ＋ Comment
-            </button>
-          )}
-
-          {/* Comment markers in the page's right margin. The overlay is a direct
-              child of the scroll element (outside the pages' zoom transform);
-              each marker expands into a popover card that floats over the page. */}
-          {showMarginComments &&
-            (comments.length > 0 || composeAnchor !== null) && (
-              <div className="preview__comments" ref={commentsRef}>
-                {commentMarkers.map((m) => {
-                  const open = expandedKey === m.key
-                  const allBroken = m.comments.every((c) => brokenIds.has(c.id))
-                  return (
-                    <div
-                      key={m.key}
-                      className="preview__comment-anchor"
-                      style={{ top: m.top, left: m.left }}
-                    >
-                      <button
-                        type="button"
-                        className={`preview__comment-marker${
-                          open ? ' preview__comment-marker--open' : ''
-                        }${allBroken ? ' preview__comment-marker--broken' : ''}`}
-                        title={
-                          m.comments.length > 1
-                            ? `${m.comments.length} comments`
-                            : `Comment by ${m.comments[0].author ?? authorName}`
-                        }
-                        onClick={() =>
-                          setExpandedKey((k) => (k === m.key ? null : m.key))
-                        }
-                      >
-                        <CommentAvatar
-                          name={m.comments[0].author ?? authorName}
-                        />
-                        {m.comments.length > 1 && (
-                          <span className="preview__comment-count">
-                            {m.comments.length}
-                          </span>
-                        )}
-                      </button>
-                      {open && (
-                        <div className="preview__comment-pop">
-                          {m.comments.map((c) => (
-                            <CommentCard
-                              key={c.id}
-                              comment={c}
-                              broken={brokenIds.has(c.id)}
-                              authorName={authorName}
-                              flash={flashId === c.id}
-                              onEdit={(id, text) => onEditComment?.(id, text)}
-                              onDelete={(id) => onDeleteComment?.(id)}
-                              onFocus={focusComment}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-
-                {composeAnchor !== null && composePos !== null && (
-                  <div
-                    className="preview__comment-anchor"
-                    style={{ top: composePos.top, left: composePos.left }}
-                  >
-                    <div className="preview__comment-pop">
-                      <CommentCompose
-                        anchor={composeAnchor}
-                        onCreate={(text) => {
-                          if (composeAnchor !== null)
-                            onAddComment?.(composeAnchor, text)
-                          setComposeAnchor(null)
-                        }}
-                        onCancel={() => setComposeAnchor(null)}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
         </div>
       </div>
     </div>

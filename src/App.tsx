@@ -31,7 +31,6 @@ import {
   type DriveFile,
 } from './drive/files'
 import {
-  isCommentsFile,
   isHistoryFile,
   isNotesFile,
   isPdf,
@@ -51,14 +50,6 @@ import {
 } from './history'
 import { parseSections } from './fountain'
 import { buildScreenplayPdf } from './pdf'
-import {
-  COMMENTS_FILENAME,
-  makeComment,
-  parseComments,
-  serializeComments,
-  type Comment,
-  type CommentAnchor,
-} from './comments'
 import {
   NOTES_FILENAME,
   NOTE_ASSET_PREFIX,
@@ -210,10 +201,6 @@ export default function App() {
   // Bumped to force the (otherwise uncontrolled) editor to remount and re-seed
   // its text — used when restoring a history snapshot into the open version.
   const [editorReloadNonce, setEditorReloadNonce] = useState(0)
-
-  // Comments for the selected project (all versions), from its comments.json.
-  const [comments, setComments] = useState<Comment[]>([])
-  const commentsFileIdRef = useRef<string | null>(null)
 
   // Recent edit-history snapshots for the selected project (all versions), from
   // its history.json. Captured as the user edits; browsable in the History
@@ -452,8 +439,8 @@ export default function App() {
       return
     }
     // This version's content is already loaded in the editor. The effect also
-    // re-runs when `versionsByProject` changes (e.g. after saving a comment or
-    // creating a version) — reloading here would overwrite the editor with the
+    // re-runs when `versionsByProject` changes (e.g. after creating a version
+    // or writing notes) — reloading here would overwrite the editor with the
     // last-saved text and silently discard any unsaved edits, so bail out.
     if (selectedVersionId === sourceVersionIdRef.current) return
     const file = Object.values(versionsByProject)
@@ -494,34 +481,6 @@ export default function App() {
       active = false
     }
   }, [selectedVersionId, versionsByProject])
-
-  // Load the selected project's comments (a single comments.json for all its
-  // versions), and remember the file id for later writes.
-  useEffect(() => {
-    if (selectedProjectId === null) {
-      setComments([])
-      commentsFileIdRef.current = null
-      return
-    }
-    const file = (versionsByProject[selectedProjectId] ?? []).find(isCommentsFile)
-    commentsFileIdRef.current = file?.id ?? null
-    if (file === undefined) {
-      setComments([])
-      return
-    }
-    let active = true
-    readFile(file)
-      .then((text) => {
-        if (active) setComments(parseComments(text))
-      })
-      .catch((err) => {
-        console.error('[comments] read failed:', err)
-        if (active) setComments([])
-      })
-    return () => {
-      active = false
-    }
-  }, [selectedProjectId, versionsByProject])
 
   // Load the selected project's edit history (a single history.json for all its
   // versions). Only re-reads when the project actually changes — a
@@ -831,43 +790,6 @@ export default function App() {
       setSavedAt(Date.now())
       setSaveState('saved')
     })
-  }
-
-  // Write the comments array to the project's comments.json (creating it the
-  // first time), then apply it to state.
-  async function persistComments(projectId: string, next: Comment[]) {
-    setComments(next)
-    const json = serializeComments(next)
-    const fileId = commentsFileIdRef.current
-    if (fileId !== null) {
-      await updateFileContent(fileId, json)
-    } else {
-      const created = await createFile(projectId, COMMENTS_FILENAME, json)
-      commentsFileIdRef.current = created.id
-      const refreshed = await listFiles(projectId)
-      setVersionsByProject((prev) => ({ ...prev, [projectId]: refreshed }))
-    }
-  }
-
-  function addComment(anchor: CommentAnchor, text: string) {
-    if (selectedProjectId === null) return
-    const projectId = selectedProjectId
-    const next = [...comments, makeComment(anchor, null, text, Date.now())]
-    void run('Save comment', () => persistComments(projectId, next))
-  }
-
-  function editComment(id: string, text: string) {
-    if (selectedProjectId === null) return
-    const projectId = selectedProjectId
-    const next = comments.map((c) => (c.id === id ? { ...c, text } : c))
-    void run('Edit comment', () => persistComments(projectId, next))
-  }
-
-  function deleteComment(id: string) {
-    if (selectedProjectId === null) return
-    const projectId = selectedProjectId
-    const next = comments.filter((c) => c.id !== id)
-    void run('Delete comment', () => persistComments(projectId, next))
   }
 
   // Background auto-save: on each edit, save immediately once enough changes
@@ -1414,13 +1336,6 @@ export default function App() {
                     // Off-stage it keeps paginating but must not size itself
                     // to that box; showing it again re-fits the page.
                     active={companion === 'preview'}
-                    versionId={selectedVersionId}
-                    comments={comments.filter(
-                      (c) => c.versionId === selectedVersionId,
-                    )}
-                    onAddComment={addComment}
-                    onEditComment={editComment}
-                    onDeleteComment={deleteComment}
                   />
                 )
                 // The editor, and whatever shares the main area with it.
