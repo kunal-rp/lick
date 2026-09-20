@@ -248,15 +248,20 @@ export function noteSnippet(note: Note): string {
 }
 
 /**
- * Notes ordered for display: starred first, then most recently modified.
+ * Notes ordered for display: active before inactive, starred before the rest,
+ * then most recently modified.
  *
- * Starring has to beat recency or it does nothing — the reason a note needs
- * pinning is precisely that everything else keeps being edited after it.
+ * Both flags have to beat recency or they do nothing — the reason a note needs
+ * pinning, or filing, is precisely that everything else keeps being edited
+ * after it. Inactive notes sink rather than disappear: still there to read,
+ * just no longer in the way of the ones being worked on.
  */
 export function sortedNotes(notes: Note[]): Note[] {
   return [...notes].sort(
     (a, b) =>
-      Number(b.starred) - Number(a.starred) || b.modifiedAt - a.modifiedAt,
+      Number(a.inactive) - Number(b.inactive) ||
+      Number(b.starred) - Number(a.starred) ||
+      b.modifiedAt - a.modifiedAt,
   )
 }
 

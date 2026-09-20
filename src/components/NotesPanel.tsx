@@ -281,12 +281,11 @@ function NotesListView({
   busy: boolean
 }) {
   const [query, setQuery] = useState('')
-  const [showInactive, setShowInactive] = useState(false)
   const now = useMemo(() => Date.now(), [notes])
 
-  const searching = query.trim() !== ''
-
-  const matching = useMemo(() => {
+  // Everything is listed; sortedNotes sinks the inactive ones to the bottom
+  // and the row greys them. Nothing is hidden, so there's nothing to reveal.
+  const ordered = useMemo(() => {
     const list = sortedNotes(notes)
     const q = query.trim().toLowerCase()
     if (q === '') return list
@@ -295,22 +294,6 @@ function NotesListView({
         n.title.toLowerCase().includes(q) || noteText(n).toLowerCase().includes(q),
     )
   }, [notes, query])
-
-  // Search looks everywhere. Hiding a note you've explicitly gone looking for
-  // is the kind of help nobody wants — the row says it's inactive instead.
-  const ordered = useMemo(
-    () =>
-      searching || showInactive
-        ? matching
-        : matching.filter((n) => !n.inactive),
-    [matching, searching, showInactive],
-  )
-
-  const inactiveCount = useMemo(
-    () => notes.filter((n) => n.inactive).length,
-    [notes],
-  )
-  const activeCount = notes.length - inactiveCount
 
   return (
     <aside className="notes" role="region" aria-label="Project notes">
@@ -403,27 +386,14 @@ function NotesListView({
             })}
           </ul>
         )}
-
-        {/* Inactive notes are out of the way, not out of reach: the count is
-            the whole affordance, and it only appears when there are any. */}
-        {!searching && inactiveCount > 0 && (
-          <button
-            type="button"
-            className="notes__inactive-toggle"
-            onClick={() => setShowInactive((v) => !v)}
-            aria-expanded={showInactive}
-          >
-            {showInactive ? 'Hide' : 'Show'} {inactiveCount} inactive
-          </button>
-        )}
       </div>
 
       <div className="notes__bottombar">
         <span className="notes__bottombar-side" />
         <span className="notes__count">
-          {activeCount === 0
+          {notes.length === 0
             ? ''
-            : `${activeCount} ${activeCount === 1 ? 'Note' : 'Notes'}`}
+            : `${notes.length} ${notes.length === 1 ? 'Note' : 'Notes'}`}
         </span>
         <button
           type="button"
