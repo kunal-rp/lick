@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Version } from '../drive/versions'
 import type { RightTab } from '../layout'
+import { ViewSwitch, type ViewOption } from './ViewSwitch'
+import {
+  CheckIcon,
+  CollapseIcon,
+  ExpandIcon,
+  MenuIcon,
+  MoreIcon,
+  NoteIcon,
+  PagesIcon,
+  PenIcon,
+} from './icons'
 import './VersionBar.css'
 
 export type MobileView = 'editor' | 'preview' | 'notes'
@@ -30,11 +41,9 @@ interface VersionBarProps {
   /** Open the edit-history dialog (version-scoped, hence its home here). */
   onOpenHistory: () => void
   historyOpen: boolean
-  /** Current mobile view; drives the cycle control (mobile only). */
+  /** Current mobile view; drives the segmented control (mobile only). */
   mobileView: MobileView
-  /** Advance Editor → Preview → Notes → Editor (mobile only). */
-  onCycleView: () => void
-  /** Jump straight to a view (mobile long-press menu). */
+  /** Switch to a view (mobile only). */
   onSetView: (view: MobileView) => void
   /** Re-fit the preview page to the pane (mobile options menu). */
   onFit: () => void
@@ -45,15 +54,17 @@ interface VersionBarProps {
 }
 
 // Desktop view switcher: the right pane's two occupants, as peers.
-const RIGHT_TABS: { key: RightTab; glyph: string; label: string }[] = [
-  { key: 'preview', glyph: '📄', label: 'Preview' },
-  { key: 'notes', glyph: '🗒️', label: 'Notes' },
+const RIGHT_TABS: { key: RightTab; icon: JSX.Element; label: string }[] = [
+  { key: 'preview', icon: <PagesIcon />, label: 'Preview' },
+  { key: 'notes', icon: <NoteIcon />, label: 'Notes' },
 ]
 
-const VIEWS: { key: MobileView; glyph: string; label: string }[] = [
-  { key: 'editor', glyph: '✏️', label: 'Editor' },
-  { key: 'preview', glyph: '📄', label: 'Preview' },
-  { key: 'notes', glyph: '🗒️', label: 'Notes' },
+// Mobile destinations, in reading order. Order matters: it's the order the
+// segments appear in, and the order the arrow keys walk.
+const VIEWS: ViewOption<MobileView>[] = [
+  { key: 'editor', icon: <PenIcon />, label: 'Editor' },
+  { key: 'preview', icon: <PagesIcon />, label: 'Preview' },
+  { key: 'notes', icon: <NoteIcon />, label: 'Notes' },
 ]
 
 /** Top bar over the editor: current project, version selector, save/new version. */
@@ -77,7 +88,6 @@ export function VersionBar({
   onOpenHistory,
   historyOpen,
   mobileView,
-  onCycleView,
   onSetView,
   onFit,
   sectionsAvailable,
@@ -85,31 +95,18 @@ export function VersionBar({
   onToggleSections,
 }: VersionBarProps) {
   // Mobile only: an options menu collapsing the less-frequent actions behind a
-  // single button, and a view menu opened by long-pressing the cycle control.
+  // single button.
   const [menuOpen, setMenuOpen] = useState(false)
-  const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const viewMenuRef = useRef<HTMLDivElement>(null)
-
-  // Long-press detection for the cycle control: a held press opens the view
-  // menu; a quick tap cycles to the next view.
-  const pressTimer = useRef(0)
-  const longPressed = useRef(false)
 
   useEffect(() => {
-    if (!menuOpen && !viewMenuOpen) return
+    if (!menuOpen) return
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node
       if (menuRef.current !== null && !menuRef.current.contains(t)) setMenuOpen(false)
-      if (viewMenuRef.current !== null && !viewMenuRef.current.contains(t)) {
-        setViewMenuOpen(false)
-      }
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setMenuOpen(false)
-        setViewMenuOpen(false)
-      }
+      if (e.key === 'Escape') setMenuOpen(false)
     }
     window.addEventListener('pointerdown', onDown)
     window.addEventListener('keydown', onKey)
@@ -117,28 +114,7 @@ export function VersionBar({
       window.removeEventListener('pointerdown', onDown)
       window.removeEventListener('keydown', onKey)
     }
-  }, [menuOpen, viewMenuOpen])
-
-  const startPress = () => {
-    longPressed.current = false
-    pressTimer.current = window.setTimeout(() => {
-      longPressed.current = true
-      setViewMenuOpen(true)
-    }, 400)
-  }
-  const endPress = () => {
-    if (pressTimer.current !== 0) {
-      clearTimeout(pressTimer.current)
-      pressTimer.current = 0
-    }
-    if (!longPressed.current) onCycleView()
-  }
-  const cancelPress = () => {
-    if (pressTimer.current !== 0) {
-      clearTimeout(pressTimer.current)
-      pressTimer.current = 0
-    }
-  }
+  }, [menuOpen])
 
   const saveLabel = saving ? 'Saving…' : dirty ? 'Save' : 'Saved'
   const savedTime =
@@ -151,7 +127,6 @@ export function VersionBar({
   // versions[] is most-recent-first, so index 0 is the latest.
   const latestId = versions.length > 0 ? versions[0].file.id : null
 
-  const current = VIEWS.find((v) => v.key === mobileView) ?? VIEWS[0]
   // The options menu is for the script views; in the notes view it's hidden.
   const optionsVisible = mobileView !== 'notes'
 
@@ -165,7 +140,7 @@ export function VersionBar({
         aria-label="Show project"
         title="Show project"
       >
-        ☰
+        <MenuIcon />
       </button>
 
       <span className="verbar__project" title={projectName}>
@@ -193,7 +168,7 @@ export function VersionBar({
       {/* Desktop view controls. These live here, in the app's own chrome,
           rather than inside the editor's text toolbar: what occupies the right
           pane is workspace state, not something you do to the document. Hidden
-          on mobile, where the cycle control at the far right does the job. */}
+          on mobile, where the segmented control at the far right does it. */}
       <div className="verbar__views" role="group" aria-label="Right pane">
         {RIGHT_TABS.map((t) => {
           const active = rightTab === t.key
@@ -212,7 +187,7 @@ export function VersionBar({
                   : `Show ${t.label.toLowerCase()} beside the editor`
               }
             >
-              <span aria-hidden="true">{t.glyph}</span>
+              {t.icon}
               <span className="verbar__view-btn-label">{t.label}</span>
             </button>
           )
@@ -234,7 +209,7 @@ export function VersionBar({
                 : 'Expand over the editor for a full-window view'
           }
         >
-          {zoomed ? '⤡' : '⤢'}
+          {zoomed ? <CollapseIcon /> : <ExpandIcon />}
         </button>
       </div>
 
@@ -302,7 +277,7 @@ export function VersionBar({
             aria-label="More options"
             title="More options"
           >
-            ⋯
+            <MoreIcon />
           </button>
           {menuOpen && (
             <div className="verbar__popup" role="menu">
@@ -369,7 +344,8 @@ export function VersionBar({
                         onToggleSections()
                       }}
                     >
-                      {showSections ? '✓ ' : ''}Sections
+                      {showSections && <CheckIcon />}
+                      Sections
                     </button>
                   )}
                 </>
@@ -379,45 +355,14 @@ export function VersionBar({
         </div>
       )}
 
-      {/* Mobile only, rightmost: one control cycles Editor → Preview → Notes
-          (tap); a long-press opens a menu to jump straight to any view. */}
-      <div className="verbar__viewcycle" ref={viewMenuRef}>
-        <button
-          type="button"
-          className="verbar__btn verbar__view"
-          onPointerDown={startPress}
-          onPointerUp={endPress}
-          onPointerLeave={cancelPress}
-          onPointerCancel={cancelPress}
-          onContextMenu={(e) => e.preventDefault()}
-          aria-haspopup="menu"
-          aria-label={`View: ${current.label}. Tap to switch, hold to choose.`}
-          title={`${current.label} — tap to switch, hold to choose`}
-        >
-          <span aria-hidden="true">{current.glyph}</span>
-          <span className="verbar__view-label">{current.label}</span>
-        </button>
-        {viewMenuOpen && (
-          <div className="verbar__popup" role="menu">
-            {VIEWS.map((v) => (
-              <button
-                key={v.key}
-                type="button"
-                className={`verbar__popup-item${
-                  v.key === mobileView ? ' verbar__popup-item--active' : ''
-                }`}
-                role="menuitemradio"
-                aria-checked={v.key === mobileView}
-                onClick={() => {
-                  setViewMenuOpen(false)
-                  onSetView(v.key)
-                }}
-              >
-                <span aria-hidden="true">{v.glyph}</span> {v.label}
-              </button>
-            ))}
-          </div>
-        )}
+      {/* Mobile only, rightmost: every destination visible, one tap each. */}
+      <div className="verbar__viewswitch">
+        <ViewSwitch
+          value={mobileView}
+          options={VIEWS}
+          onChange={onSetView}
+          label="View"
+        />
       </div>
     </div>
   )

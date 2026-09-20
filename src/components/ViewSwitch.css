@@ -1,0 +1,87 @@
+/*
+ * Segmented control. One inset track holding N equal segments, with the active
+ * one raised out of it — the shape reads as "these are the choices, this is the
+ * one you're on" without needing a label to say so.
+ */
+.viewswitch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+}
+
+.viewswitch__seg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.viewswitch__seg svg {
+  width: 14px;
+  height: 14px;
+}
+
+.viewswitch__seg:hover {
+  color: var(--text);
+}
+
+.viewswitch__seg--active,
+.viewswitch__seg--active:hover {
+  background: var(--raised);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* Keyboard focus has to stay visible on the inactive segments too, since the
+   arrow keys move between them without a click. */
+.viewswitch__seg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.viewswitch--compact .viewswitch__seg {
+  padding: 0 8px;
+}
+
+/*
+ * Phones: the control is the primary navigation, so it takes the width it needs
+ * and its segments grow to a comfortable tap target rather than staying at the
+ * desktop's tighter rhythm.
+ */
+@media (max-width: 768px) {
+  .viewswitch {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 280px;
+  }
+
+  .viewswitch__seg {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 30px;
+    padding: 0 6px;
+  }
+
+  /* Below ~360px three labelled segments stop fitting beside the rest of the
+     bar; drop to icons, which stay unambiguous because each is distinct. */
+  @media (max-width: 400px) {
+    .viewswitch__label {
+      display: none;
+    }
+  }
+}

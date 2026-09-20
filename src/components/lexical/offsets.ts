@@ -2,7 +2,9 @@ import type { LexicalEditor, LexicalNode, TextNode } from 'lexical'
 import {
   $createRangeSelection,
   $getRoot,
+  $getSelection,
   $isElementNode,
+  $isRangeSelection,
   $isTextNode,
   $setSelection,
 } from 'lexical'
@@ -176,6 +178,48 @@ export function scrollOffsetIntoView(
   const caret = range.getBoundingClientRect()
   const view = surface.getBoundingClientRect()
   surface.scrollTop += caret.top - view.top - view.height * 0.3
+}
+
+/**
+ * Absolute character offset of the caret (the selection's focus), or null when
+ * there's no range selection. Mirrors {@link locate} in reverse: it walks the
+ * paragraph's children accumulating text sizes, counting each line break as the
+ * single "\n" it contributes.
+ *
+ * An anchor of type 'element' addresses a child *index* rather than a character
+ * offset, which is what Lexical reports when the caret sits on an empty line, so
+ * that case sums the children before the index instead of adding into one.
+ */
+export function caretOffset(): number | null {
+  const selection = $getSelection()
+  if (!$isRangeSelection(selection)) return null
+  const para = $getRoot().getFirstChild()
+  if (!$isElementNode(para)) return null
+
+  const point = selection.focus
+  const children = para.getChildren()
+
+  if (point.type === 'element') {
+    let acc = 0
+    for (let i = 0; i < point.offset && i < children.length; i++) {
+      const child = children[i]
+      acc += $isTextNode(child) ? child.getTextContentSize() : 1
+    }
+    return acc
+  }
+
+  let acc = 0
+  for (const child of children) {
+    if (child.getKey() === point.key) return acc + point.offset
+    acc += $isTextNode(child) ? child.getTextContentSize() : 1
+  }
+  return null
+}
+
+/** Start offset of the line containing `offset` within `text`. */
+export function lineStartAt(text: string, offset: number): number {
+  const before = text.lastIndexOf('\n', Math.max(0, offset - 1))
+  return before === -1 ? 0 : before + 1
 }
 
 /**

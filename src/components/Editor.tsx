@@ -19,6 +19,7 @@ import { CapitalizationPlugin } from './lexical/plugins/CapitalizationPlugin'
 import { JumpToLinePlugin } from './lexical/plugins/JumpToLinePlugin'
 import { RevealPreviewPlugin } from './lexical/plugins/RevealPreviewPlugin'
 import { CaretVisibilityPlugin } from './lexical/plugins/CaretVisibilityPlugin'
+import { ScriptKeysPlugin } from './lexical/plugins/ScriptKeysPlugin'
 import type { Section } from '../fountain'
 import './Editor.css'
 
@@ -124,6 +125,11 @@ export function Editor({
             ErrorBoundary={LexicalErrorBoundary}
           />
         </div>
+        {/* Fountain element keys, pinned under the surface so they sit
+            directly above the on-screen keyboard (the workspace is already
+            clamped to the visual viewport — see App.css). Phone-only: a
+            hardware keyboard reaches every one of these characters directly. */}
+        <ScriptKeysPlugin />
         <HistoryPlugin />
         <EmphasisShortcutsPlugin />
         <JumpToLinePlugin target={jumpTo ?? null} />

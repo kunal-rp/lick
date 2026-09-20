@@ -176,25 +176,13 @@
   font-size: 13px;
 }
 
-/* View-cycle control (mobile only) — on desktop the view controls above do
-   this job. */
-.verbar__viewcycle {
-  position: relative;
+/* Segmented view control (mobile only) — on desktop the view controls above
+   do this job. */
+.verbar__viewswitch {
   display: none;
-  flex: 0 0 auto;
-}
-
-.verbar__view {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
-  line-height: 1;
-  touch-action: none;
-}
-
-.verbar__view-label {
-  font-size: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
 .verbar__popup--left {
@@ -307,7 +295,38 @@
     display: block;
   }
 
-  .verbar__viewcycle {
-    display: block;
+  .verbar__viewswitch {
+    display: flex;
   }
+}
+
+/* Icon buttons in the bar: centre the SVG in its hit area rather than letting
+   it sit on the (now absent) text baseline. */
+.verbar__nav,
+.verbar__options {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.verbar__nav svg {
+  width: 17px;
+  height: 17px;
+}
+
+.verbar__options svg {
+  width: 16px;
+  height: 16px;
+}
+
+.verbar__view-btn svg,
+.verbar__popup-item svg {
+  width: 14px;
+  height: 14px;
+}
+
+.verbar__popup-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }

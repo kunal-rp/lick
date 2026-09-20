@@ -671,3 +671,56 @@
   width: 14px;
   height: 14px;
 }
+
+/*
+ * Fountain element keys (ScriptKeysPlugin). Hidden by default: on a hardware
+ * keyboard every marker here is already a single keystroke, so the row would
+ * only be taking space from the page.
+ */
+.scriptkeys {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .scriptkeys {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    /* Scrolls horizontally rather than wrapping to a second row — the keyboard
+       is already claiming half the screen and a two-row accessory eats the rest
+       of the visible page. */
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-top: 1px solid var(--border);
+    background: var(--panel-bg);
+  }
+
+  .scriptkeys::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scriptkeys__key {
+    flex: 0 0 auto;
+    min-height: 32px;
+    padding: 0 11px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--raised);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    /* Stops iOS from selecting the label text on a long press. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .scriptkeys__key:active {
+    background: var(--selected);
+  }
+}

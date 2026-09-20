@@ -67,6 +67,7 @@ import { useWorkingFolder } from './drive/useWorkingFolder'
 import { loadLastOpened, saveLastOpened } from './lastOpened'
 import { loadLayout, saveLayout, type RightTab } from './layout'
 import { loadTheme, saveTheme, type Theme } from './theme'
+import { MenuIcon } from './components/icons'
 import { useIsMobile } from './useIsMobile'
 import { useAppViewportHeight } from './useAppViewportHeight'
 import './App.css'
@@ -702,10 +703,6 @@ export default function App() {
       setZoomed('right')
     }
   }
-  const cycleMobileView = () => {
-    const order: MobileView[] = ['editor', 'preview', 'notes']
-    setMobileView(order[(order.indexOf(mobileView) + 1) % order.length])
-  }
 
   // Bumped to ask the preview to (re)fit the page to the pane — driven from the
   // top-bar options menu on mobile (where the preview has no Fit button).
@@ -1058,7 +1055,7 @@ export default function App() {
         aria-label="Show project"
         title="Show project"
       >
-        ☰
+        <MenuIcon />
       </button>
     </div>
   )
@@ -1152,7 +1149,6 @@ export default function App() {
               onOpenHistory={() => setShowHistory((v) => !v)}
               historyOpen={showHistory}
               mobileView={mobileView}
-              onCycleView={cycleMobileView}
               onSetView={setMobileView}
               onFit={() => setFitNonce((n) => n + 1)}
               sectionsAvailable={sections.length > 0}
