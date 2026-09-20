@@ -415,6 +415,9 @@ function NoteView({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  // True while files are being dragged over the note, for the drop affordance.
+  const [dragging, setDragging] = useState(false)
+  const docRef = useRef<HTMLDivElement>(null)
   const now = useMemo(() => Date.now(), [note.modifiedAt])
   // The text run last focused (its block id) and its Lexical editor, so list
   // buttons target it and inserted media lands right after it.
@@ -455,26 +458,24 @@ function NoteView({
     onChangeNote(note.id, { blocks })
   }
 
-  async function onFilesPicked(fileList: FileList | null) {
-    if (fileList === null || fileList.length === 0) return
+  /**
+   * Upload files and put them in the note — the one path behind the photo
+   * button, a drop, and a paste.
+   *
+   * Non-media is dropped silently rather than refused loudly: a drag from a
+   * folder or a paste from a rich document routinely carries a text flavour
+   * alongside the image, and complaining about the parts we can't use would
+   * turn every successful paste into an error message.
+   */
+  async function addMedia(files: File[], afterBlockId?: string) {
+    const usable = files.filter(
+      (f) => f.type.startsWith('image/') || f.type.startsWith('video/'),
+    )
+    if (usable.length === 0) return
     setUploading(true)
     try {
-      const media = await onUploadMedia(Array.from(fileList))
-      if (media.length === 0) return
-      const nowTs = Date.now()
-      // Insert the media right after the focused text run (not at the very end),
-      // followed by a fresh text block to keep writing in below it. We insert
-      // after the run rather than splitting it so no existing editor reseeds.
-      const fid = focusedBlockRef.current
-      const idx = fid !== null ? note.blocks.findIndex((b) => b.id === fid) : -1
-      const at = idx >= 0 ? idx + 1 : note.blocks.length
-      const after = makeTextBlock(nowTs)
-      const blocks = normalizeBlocks(
-        [...note.blocks.slice(0, at), ...media, after, ...note.blocks.slice(at)],
-        nowTs,
-      )
-      setFocusBlockId(after.id)
-      onChangeNote(note.id, { blocks })
+      const media = await onUploadMedia(usable)
+      if (media.length > 0) insertBlocks(media, afterBlockId)
     } finally {
       setUploading(false)
       if (fileInputRef.current !== null) fileInputRef.current.value = ''
@@ -497,8 +498,32 @@ function NoteView({
    * With nothing focused, or with the caret already in the run's last
    * paragraph, there's nothing to split and this is a plain insert after it.
    */
-  function insertBlock(block: NoteBlock) {
+  function insertBlocks(newBlocks: NoteBlock[], afterBlockId?: string) {
     const nowTs = Date.now()
+
+    // A drop names the block it landed on, and goes after it. Nothing to split
+    // — the writer pointed at a position rather than leaving a caret in one.
+    if (afterBlockId !== undefined) {
+      const found = note.blocks.findIndex((b) => b.id === afterBlockId)
+      const at = found >= 0 ? found + 1 : note.blocks.length
+      // Somewhere to type underneath — unless there already is one. Dropping
+      // three photos in a row shouldn't leave three empty runs behind them.
+      const next = note.blocks[at]
+      const below = next?.type === 'text' ? null : makeTextBlock(nowTs)
+      const blocks = normalizeBlocks(
+        [
+          ...note.blocks.slice(0, at),
+          ...newBlocks,
+          ...(below === null ? [] : [below]),
+          ...note.blocks.slice(at),
+        ],
+        nowTs,
+      )
+      setFocusBlockId((below ?? next)?.id ?? null)
+      onChangeNote(note.id, { blocks })
+      return
+    }
+
     const fid = focusedBlockRef.current
     const idx = fid !== null ? note.blocks.findIndex((b) => b.id === fid) : -1
 
@@ -516,7 +541,7 @@ function NoteView({
           [
             ...note.blocks.slice(0, idx),
             above,
-            block,
+            ...newBlocks,
             below,
             ...note.blocks.slice(idx + 1),
           ],
@@ -531,7 +556,7 @@ function NoteView({
     const at = idx >= 0 ? idx + 1 : note.blocks.length
     const after = makeTextBlock(nowTs)
     const blocks = normalizeBlocks(
-      [...note.blocks.slice(0, at), block, after, ...note.blocks.slice(at)],
+      [...note.blocks.slice(0, at), ...newBlocks, after, ...note.blocks.slice(at)],
       nowTs,
     )
     setFocusBlockId(after.id)
@@ -551,8 +576,84 @@ function NoteView({
   // nothing to quote, so the button is disabled rather than guessing a range.
   function addScriptRef() {
     const block = onCreateScriptRef?.()
-    if (block != null) insertBlock(block)
+    if (block != null) insertBlocks([block])
   }
+
+  // The latest addMedia, so the listeners below can stay bound across renders
+  // without capturing a stale `note`.
+  const addMediaRef = useRef(addMedia)
+  addMediaRef.current = addMedia
+
+  /**
+   * Drop files onto the note, or paste them into it.
+   *
+   * Bound natively and in the capture phase, because both events are headed
+   * for a Lexical editor that has its own handling for them — and Lexical's
+   * answer for an image is to insert nothing. Catching them on the way down
+   * lets the note take the ones it can use and leaves everything else (pasted
+   * text, dragged selections) to the editor untouched.
+   */
+  useEffect(() => {
+    const el = docRef.current
+    if (el === null) return
+
+    const filesIn = (dt: DataTransfer | null): File[] =>
+      dt === null ? [] : Array.from(dt.files)
+
+    const carriesFiles = (dt: DataTransfer | null) =>
+      dt !== null && Array.from(dt.types).includes('Files')
+
+    const onDragOver = (e: DragEvent) => {
+      if (!carriesFiles(e.dataTransfer)) return
+      // Without this the browser takes the drop and navigates to the file,
+      // discarding the note — and everything else on the page with it.
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.dataTransfer !== null) e.dataTransfer.dropEffect = 'copy'
+      setDragging(true)
+    }
+
+    const onDragLeave = (e: DragEvent) => {
+      // Only when the pointer actually leaves the note, not on every crossing
+      // between the blocks inside it.
+      if (e.relatedTarget === null || !el.contains(e.relatedTarget as Node)) {
+        setDragging(false)
+      }
+    }
+
+    const onDrop = (e: DragEvent) => {
+      setDragging(false)
+      const files = filesIn(e.dataTransfer)
+      if (files.length === 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      // Put it where it landed: the block under the pointer, or the end.
+      const onBlock = (e.target as Element | null)?.closest?.('[data-block-id]')
+      const id = onBlock?.getAttribute('data-block-id') ?? undefined
+      void addMediaRef.current(files, id)
+    }
+
+    const onPaste = (e: ClipboardEvent) => {
+      const files = filesIn(e.clipboardData)
+      if (files.length === 0) return // plain text paste — leave it to Lexical
+      e.preventDefault()
+      e.stopPropagation()
+      // No position: a paste goes where the caret is, which insertBlocks
+      // already works out by splitting the focused run.
+      void addMediaRef.current(files)
+    }
+
+    el.addEventListener('dragover', onDragOver, true)
+    el.addEventListener('dragleave', onDragLeave, true)
+    el.addEventListener('drop', onDrop, true)
+    el.addEventListener('paste', onPaste, true)
+    return () => {
+      el.removeEventListener('dragover', onDragOver, true)
+      el.removeEventListener('dragleave', onDragLeave, true)
+      el.removeEventListener('drop', onDrop, true)
+      el.removeEventListener('paste', onPaste, true)
+    }
+  }, [])
 
   const firstTextId = note.blocks.find((b) => b.type === 'text')?.id ?? null
 
@@ -582,7 +683,12 @@ function NoteView({
         </button>
       </div>
 
-      <div className="notes__scroll notes__doc">
+      <div
+        ref={docRef}
+        className={`notes__scroll notes__doc${
+          dragging ? ' notes__doc--dropping' : ''
+        }`}
+      >
         <div className="notes__doc-date">{docDate(note.modifiedAt, now)}</div>
         <input
           ref={titleRef}
@@ -703,7 +809,7 @@ function NoteView({
         accept="image/*,video/*"
         multiple
         className="notes__file-input"
-        onChange={(e) => void onFilesPicked(e.target.files)}
+        onChange={(e) => void addMedia(Array.from(e.target.files ?? []))}
       />
     </aside>
   )
@@ -790,6 +896,7 @@ function NoteTextEditor({
   return (
     <div
       className="note-rte"
+      data-block-id={blockId}
       onFocusCapture={() => {
         if (editorRef.current !== null) onEditorFocus(blockId, editorRef.current)
       }}
@@ -865,7 +972,7 @@ function MediaBlockView({
   }, [block.fileId, loadMedia])
 
   return (
-    <figure className="notes__media">
+    <figure className="notes__media" data-block-id={block.id}>
       {failed ? (
         <div className="notes__media-error">Couldn’t load {block.name || 'media'}</div>
       ) : url === null ? (
@@ -919,7 +1026,7 @@ function ScriptRefView({
       : `line ${block.startLine + 1}`
 
   return (
-    <figure className="scriptref">
+    <figure className="scriptref" data-block-id={block.id}>
       <figcaption className="scriptref__head">
         <button
           type="button"

@@ -67,6 +67,16 @@ import { useIsMobile } from './useIsMobile'
 import { useAppViewportHeight } from './useAppViewportHeight'
 import './App.css'
 
+/** A file extension for a MIME type, for uploads that arrive without a name. */
+function extensionFor(mime: string): string {
+  const subtype = mime.split('/')[1]?.split(';')[0] ?? ''
+  if (subtype === '') return ''
+  if (subtype === 'jpeg') return '.jpg'
+  if (subtype === 'quicktime') return '.mov'
+  if (subtype === 'svg+xml') return '.svg'
+  return `.${subtype}`
+}
+
 // Shown in command hints. Matches the actual handler, which accepts either.
 const MOD_KEY =
   typeof navigator !== 'undefined' &&
@@ -386,6 +396,29 @@ export default function App() {
   }
   useEffect(rememberOpen, [folderId, selectedProjectId, selectedVersionId])
 
+  /**
+   * Refuse file drops everywhere except where something handles them.
+   *
+   * A browser's default for a dropped file is to navigate to it, which would
+   * take the whole workspace down with it — unsaved edits included — for what
+   * was probably an attempt to put a photo in a note. The note's own handlers
+   * run in the capture phase and stop the event there, so anything still
+   * bubbling to the window by definition had nowhere to go.
+   */
+  useEffect(() => {
+    const refuse = (e: DragEvent) => {
+      if (!Array.from(e.dataTransfer?.types ?? []).includes('Files')) return
+      e.preventDefault()
+      if (e.dataTransfer !== null) e.dataTransfer.dropEffect = 'none'
+    }
+    window.addEventListener('dragover', refuse)
+    window.addEventListener('drop', refuse)
+    return () => {
+      window.removeEventListener('dragover', refuse)
+      window.removeEventListener('drop', refuse)
+    }
+  }, [])
+
   // ⌘/Ctrl+S saves the editor's current text to the open version.
   useEffect(() => {
     persistRef.current = () => void persist()
@@ -667,9 +700,12 @@ export default function App() {
     try {
       for (const file of files) {
         const type = file.type.startsWith('video/') ? 'video' : 'image'
+        // A pasted screenshot arrives as a blob with no name, or a bare
+        // "image.png"; fall back to the MIME subtype so the stored file still
+        // ends in something Drive and the browser can recognise.
         const ext = file.name.includes('.')
           ? file.name.slice(file.name.lastIndexOf('.'))
-          : ''
+          : extensionFor(file.type)
         const assetName = `${NOTE_ASSET_PREFIX}${makeId(now)}${ext}`
         const bytes = new Uint8Array(await file.arrayBuffer())
         const created = await createBinaryFile(

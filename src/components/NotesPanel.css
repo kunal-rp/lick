@@ -673,3 +673,14 @@
   opacity: 0.35;
   cursor: default;
 }
+
+/*
+ * Drop target. An inset outline rather than a fill or an overlay: the note
+ * stays fully readable while you're deciding where to let go, which matters
+ * because where you let go is what decides the position.
+ */
+.notes__doc--dropping {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+  background: var(--hover);
+}
