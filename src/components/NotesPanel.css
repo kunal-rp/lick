@@ -666,3 +666,10 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Undo sits after the spacer, apart from the insert tools: those act on the
+   note, this takes an action back. */
+.notes__undo:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

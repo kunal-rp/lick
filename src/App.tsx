@@ -27,6 +27,7 @@ import {
   readFile,
   readFileBlob,
   trashFile,
+  untrashFile,
   updateBinaryFileContent,
   updateFileContent,
   type DriveFile,
@@ -236,8 +237,9 @@ export default function App() {
   )
   // Latest persist() so the ⌘/Ctrl+S handler always calls the current closure.
   const persistRef = useRef<() => void>(() => {})
-  // Same, for the ⇧⌘P preview toggle.
+  // Same, for the ⇧⌘P preview toggle and the notes block undo.
   const previewRef = useRef<() => void>(() => {})
+  const undoRef = useRef<() => void>(() => {})
 
   const savingRef = useRef(false)
   const changeCountRef = useRef(0)
@@ -388,6 +390,7 @@ export default function App() {
   useEffect(() => {
     persistRef.current = () => void persist()
     previewRef.current = togglePreview
+    undoRef.current = undoNotes
   })
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -401,6 +404,16 @@ export default function App() {
         // a trap you have to find Escape to get out of.
         e.preventDefault()
         setShowCommands((open) => !open)
+      } else if (key === 'z' && !e.shiftKey) {
+        // Lexical owns ⌘Z while the caret is in a text editor — the script's
+        // or a note's — and that's where it belongs. Outside one there's no
+        // editor to undo, so it falls through to the note's block history,
+        // which is what you want after clicking × on a reference.
+        const active = document.activeElement
+        if (active?.closest('[contenteditable="true"]') != null) return
+        if (notesUndoRef.current.length === 0) return
+        e.preventDefault()
+        undoRef.current()
       } else if (e.shiftKey && key === 'p') {
         // ⇧⌘P steps into the pages and back out — Slugline's shortcut for the
         // same move, and the reason the preview no longer needs to live on
@@ -537,6 +550,49 @@ export default function App() {
     }
   }
 
+  /**
+   * Structural changes to a note — a block added or removed — that can be put
+   * back, newest first.
+   *
+   * Typing is not in here: each text run is a Lexical editor with its own undo
+   * stack, so ⌘Z inside one reverts keystrokes the way it does anywhere else.
+   * What that can't reach is the shape of the note, because adding a reference
+   * or deleting a photo happens out here in the block list. Removing the
+   * snapshot timeline took away the last net under those, so this is it.
+   *
+   * Whole-array entries rather than a diff: a note is small, the depth is
+   * capped, and "put it back exactly as it was" is a guarantee that's hard to
+   * get wrong.
+   */
+  const notesUndoRef = useRef<
+    { label: string; notes: Note[]; untrash: string[] }[]
+  >([])
+  const [notesUndoLabel, setNotesUndoLabel] = useState<string | null>(null)
+  const NOTES_UNDO_DEPTH = 25
+
+  function pushNotesUndo(label: string, untrash: string[] = []) {
+    notesUndoRef.current = [
+      { label, notes: notesRef.current, untrash },
+      ...notesUndoRef.current,
+    ].slice(0, NOTES_UNDO_DEPTH)
+    setNotesUndoLabel(label)
+  }
+
+  function undoNotes() {
+    const [top, ...rest] = notesUndoRef.current
+    if (top === undefined) return
+    notesUndoRef.current = rest
+    setNotesUndoLabel(rest[0]?.label ?? null)
+    mutateNotes(top.notes)
+    // Blocks restored, so put their files back too — a photo whose file is
+    // still in the trash would come back as a broken frame.
+    if (top.untrash.length > 0) {
+      void run('Restore media', async () => {
+        await Promise.all(top.untrash.map((id) => untrashFile(id)))
+      })
+    }
+  }
+
   // Apply a notes mutation: update state + ref immediately (so the UI is live)
   // and schedule a debounced write to Drive.
   function mutateNotes(next: Note[]) {
@@ -561,6 +617,22 @@ export default function App() {
 
   // Edit a note's title and/or blocks, stamping the modified time.
   function updateNote(id: string, patch: Partial<Pick<Note, 'title' | 'blocks'>>) {
+    // Which blocks there are, versus what one of them says. Typing rewrites a
+    // block's text and leaves the list alone; inserting or removing one
+    // changes the list. Only the latter needs an undo entry — pushing one per
+    // keystroke would bury the structural change the writer actually wants
+    // back, and Lexical already owns the keystrokes.
+    const before = notesRef.current.find((n) => n.id === id)
+    const ids = (blocks: Note['blocks']) => blocks.map((b) => b.id).join(',')
+    if (
+      patch.blocks !== undefined &&
+      before !== undefined &&
+      ids(before.blocks) !== ids(patch.blocks)
+    ) {
+      pushNotesUndo(
+        patch.blocks.length > before.blocks.length ? 'Undo insert' : 'Undo removal',
+      )
+    }
     const next = notesRef.current.map((n) =>
       n.id === id ? { ...n, ...patch, modifiedAt: Date.now() } : n,
     )
@@ -570,6 +642,10 @@ export default function App() {
   // Delete a note and trash the Drive files backing any inline media it held.
   function deleteNote(id: string) {
     const note = notesRef.current.find((n) => n.id === id)
+    pushNotesUndo(
+      'Undo delete note',
+      (note ? mediaBlocks(note) : []).map((m) => m.fileId),
+    )
     mutateNotes(notesRef.current.filter((n) => n.id !== id))
     const media = note ? mediaBlocks(note) : []
     if (media.length > 0) {
@@ -619,6 +695,7 @@ export default function App() {
     // is removed by the note view itself.
     if (note === undefined || block === undefined) return
     if (block.type !== 'image' && block.type !== 'video') return
+    pushNotesUndo('Undo remove media', [block.fileId])
     const fileId = block.fileId
     const next = notesRef.current.map((n) =>
       n.id === noteId
@@ -1291,6 +1368,8 @@ export default function App() {
                     onCreateScriptRef={createScriptRef}
                     canAddScriptRef={scriptSelection !== null}
                     onOpenScriptRef={openScriptRef}
+                    onUndo={undoNotes}
+                    undoLabel={notesUndoLabel}
                     onClose={() => chooseCompanion('none')}
                     busy={busy}
                   />

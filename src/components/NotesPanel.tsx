@@ -76,6 +76,12 @@ interface NotesPanelProps {
   canAddScriptRef?: boolean
   /** Open a reference's draft and jump to its lines. */
   onOpenScriptRef?: (block: ScriptRefBlock) => void
+  /**
+   * Put back the last block added or removed, or null when there's nothing to
+   * put back. Structural only: typing is each run's own Lexical undo.
+   */
+  onUndo?: () => void
+  undoLabel?: string | null
   onClose: () => void
   busy: boolean
 }
@@ -203,6 +209,8 @@ export function NotesPanel({
   onCreateScriptRef,
   canAddScriptRef = false,
   onOpenScriptRef,
+  onUndo,
+  undoLabel = null,
   onClose,
   busy,
 }: NotesPanelProps) {
@@ -235,6 +243,8 @@ export function NotesPanel({
         onCreateScriptRef={onCreateScriptRef}
         canAddScriptRef={canAddScriptRef}
         onOpenScriptRef={onOpenScriptRef}
+        onUndo={onUndo}
+        undoLabel={undoLabel}
         busy={busy}
       />
     )
@@ -384,6 +394,8 @@ function NoteView({
   onCreateScriptRef,
   canAddScriptRef = false,
   onOpenScriptRef,
+  onUndo,
+  undoLabel = null,
   busy,
 }: {
   note: Note
@@ -396,6 +408,8 @@ function NoteView({
   onCreateScriptRef?: () => ScriptRefBlock | null
   canAddScriptRef?: boolean
   onOpenScriptRef?: (block: ScriptRefBlock) => void
+  onUndo?: () => void
+  undoLabel?: string | null
   busy: boolean
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -660,6 +674,27 @@ function NoteView({
           <QuoteIcon />
         </button>
         <span className="notes__bottombar-side" />
+        {/*
+          Undo for the note's *shape* — a reference or photo added or removed.
+          It sits apart from the insert tools because it isn't one: those act
+          on the note, this takes an action back. Typing has its own undo in
+          each run (⌘Z), which this deliberately doesn't touch.
+        */}
+        <button
+          type="button"
+          className="notes__tool notes__undo"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onUndo?.()}
+          disabled={undoLabel === null}
+          aria-label={undoLabel ?? 'Nothing to undo'}
+          title={
+            undoLabel === null
+              ? 'Nothing to undo — typing undoes with ⌘/Ctrl+Z'
+              : undoLabel
+          }
+        >
+          <UndoIcon />
+        </button>
       </div>
 
       <input
@@ -998,4 +1033,15 @@ function splitRunAtCaret(
   })
 
   return out
+}
+
+// Counter-clockwise arrow, for taking a block change back.
+function UndoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 8h11a5 5 0 0 1 0 10h-6" />
+      <path d="M7 4 3 8l4 4" />
+    </svg>
+  )
 }

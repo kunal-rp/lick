@@ -192,10 +192,29 @@ export async function updateFileContent(
 
 /** Move a file to Drive's trash (recoverable), removing it from listings. */
 export async function trashFile(fileId: string): Promise<void> {
+  await setTrashed(fileId, true)
+}
+
+/**
+ * Take a file back out of the trash.
+ *
+ * Deleting a note or one of its photos trashes the file that backs it, so
+ * undoing that has to put the file back as well as the block — otherwise the
+ * note returns intact but pointing at something Drive has thrown away.
+ */
+export async function untrashFile(fileId: string): Promise<void> {
+  await setTrashed(fileId, false)
+}
+
+async function setTrashed(fileId: string, trashed: boolean): Promise<void> {
   const res = await fetch(`${API}/files/${fileId}`, {
     method: 'PATCH',
     headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ trashed: true }),
+    body: JSON.stringify({ trashed }),
   })
-  if (!res.ok) throw new Error(`Drive delete failed (${res.status})`)
+  if (!res.ok) {
+    throw new Error(
+      `Drive ${trashed ? 'delete' : 'restore'} failed (${res.status})`,
+    )
+  }
 }
