@@ -1386,6 +1386,9 @@ export default function App() {
                     showSections={showSections}
                     onToggleSections={() => setShowSections((v) => !v)}
                     fitNonce={fitNonce}
+                    // Off-stage it keeps paginating but must not size itself
+                    // to that box; showing it again re-fits the page.
+                    active={companion === 'preview'}
                     versionId={selectedVersionId}
                     comments={comments.filter(
                       (c) => c.versionId === selectedVersionId,

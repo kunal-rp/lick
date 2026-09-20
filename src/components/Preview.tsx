@@ -31,6 +31,12 @@ interface PreviewProps {
   /** Bumped to request a (re)fit of the page to the pane (mobile: from the
    *  top-bar options menu, which replaces the in-preview Fit button). */
   fitNonce?: number
+  /**
+   * Whether the preview is the pane on screen. It stays mounted when it isn't
+   * — it's what paginates the script — but it must not size itself against the
+   * off-stage box, and it re-fits each time it comes back into view.
+   */
+  active?: boolean
   /** Comments anchored to the version currently shown. */
   comments?: Comment[]
   /** The version id to anchor new comments to (null hides commenting). */
@@ -135,6 +141,7 @@ export function Preview({
   showSections = false,
   onToggleSections,
   fitNonce = 0,
+  active = true,
   comments = [],
   versionId = null,
   authorName = 'You',
@@ -630,18 +637,33 @@ export function Preview({
     setZoom(clampZoom(Math.floor((available / extentPx) * 100)))
   }, [showMarginComments])
 
+  // Showing the preview re-fits it, every time.
+  //
+  // A zoom you set with the wheel or a pinch is for the page in front of you,
+  // not a preference to carry: coming back to the pages later — very likely at
+  // a different pane width, after dragging the divider or switching to notes
+  // and back — should start from the page fitted, the way opening it does.
+  const wasActive = useRef(active)
+  useEffect(() => {
+    if (active && !wasActive.current) {
+      userZoomedRef.current = false
+      setAutoFit(true)
+    }
+    wasActive.current = active
+  }, [active])
+
   // Desktop auto-fit: while enabled, fit now and on every pane resize (dragging
   // the split divider, window resize). A manual zoom clears `autoFit`, which
-  // tears this down.
+  // tears this down. Gated on `active` so it never measures the off-stage box.
   useEffect(() => {
-    if (!autoFit || isMobile) return
+    if (!autoFit || isMobile || !active) return
     const scroll = scrollRef.current
     if (scroll === null) return
     fitZoom()
     const ro = new ResizeObserver(() => fitZoom())
     ro.observe(scroll)
     return () => ro.disconnect()
-  }, [autoFit, isMobile, fitZoom])
+  }, [autoFit, isMobile, active, fitZoom])
 
   // Fit the full page width to the pane (mobile). Unlike the desktop `fitZoom`,
   // this fits the whole 8.5in sheet so nothing crops on a phone.
@@ -669,7 +691,7 @@ export function Preview({
   // Mobile auto-fit: fit the page to the pane on load and on every pane resize
   // (rotation, keyboard), unless the reader has pinch-zoomed by hand.
   useEffect(() => {
-    if (!isMobile) return
+    if (!isMobile || !active) return
     const scroll = scrollRef.current
     if (scroll === null) return
     const fit = () => {
@@ -680,7 +702,7 @@ export function Preview({
     const observer = new ResizeObserver(fit)
     observer.observe(scroll)
     return () => observer.disconnect()
-  }, [isMobile, fitToPane])
+  }, [isMobile, active, fitToPane])
 
   // The sheets are scaled with `transform`, which (unlike `zoom`) doesn't shrink
   // the element's layout box — so the scroll region would otherwise reserve the
@@ -998,23 +1020,15 @@ export function Preview({
   return (
     <div className="preview">
       <div className="preview__toolbar">
-        <label className="preview__zoom">
-          <span className="preview__zoom-label">Zoom</span>
-          <input
-            className="preview__zoom-slider"
-            type="range"
-            min={ZOOM_MIN}
-            max={ZOOM_MAX}
-            step={5}
-            value={zoom}
-            onChange={(e) => {
-              setAutoFit(false)
-              setZoom(Number(e.target.value))
-            }}
-            aria-label="Preview magnification"
-          />
-          <span className="preview__zoom-value">{Math.round(zoom)}%</span>
-        </label>
+        {/*
+          A read-out, not a control. The slider that used to sit here was a
+          third way to do what the wheel and the pinch already do, and it took
+          the widest element in the bar to do it — while the thing a reader
+          actually wants after zooming is simply "put it back", which is Fit.
+        */}
+        <span className="preview__zoom-value" aria-live="off">
+          {Math.round(zoom)}%
+        </span>
         {/* Desktop: Fit + Sections live here. On mobile they move to the
             top-bar options (⋯) menu, so the preview toolbar stays minimal. */}
         {!isMobile && (
@@ -1023,12 +1037,19 @@ export function Preview({
             className={`preview__zoom-fit${
               autoFit ? ' preview__zoom-fit--active' : ''
             }`}
-            onClick={() => setAutoFit((v) => !v)}
+            // One-way: this returns you to the fitted page. There's nothing
+            // useful on the other side of the toggle now that the slider is
+            // gone — "auto-fit off" only ever meant "keep the zoom I set by
+            // hand", which a gesture already does on its own.
+            onClick={() => {
+              userZoomedRef.current = false
+              setAutoFit(true)
+            }}
             aria-pressed={autoFit}
             title={
               autoFit
-                ? 'Auto-fit on: the preview refits as the pane resizes'
-                : 'Fit the page to the pane and keep it fitted on resize'
+                ? 'Fitted to the pane, and refitting as it resizes'
+                : 'Fit the page back to the pane'
             }
           >
             Fit
