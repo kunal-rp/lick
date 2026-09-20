@@ -1,0 +1,109 @@
+/*
+ * Screenplay element geometry.
+ *
+ * Shared by the two places a script is laid out: the editor, where
+ * LineFormatPlugin tags each line's paragraph with `data-el`, and a quoted
+ * reference inside a note, which tags the lines it captured. Both carry the
+ * `.screenplay` class and declare a `screenplay` container, so the same
+ * measurements and the same narrow fallback apply to each at its own width.
+ *
+ * Measurements are the standard US screenplay ones, converted from inches at
+ * 10 characters to the inch and expressed relative to the 60ch text block (so
+ * "1in from the block's left edge" is 10ch, not 1in of screen):
+ *
+ *            page      from block   width
+ *   action    1.5in        0ch       60ch
+ *   dialogue  2.5in       10ch       35ch
+ *   paren     3.0in       15ch       30ch
+ *   cue       3.7in       22ch         —
+ *   trans     6.0in         —      flush right
+ *
+ * Indents are `padding` rather than `margin` so each line's clickable box
+ * still spans the full column — clicking in the gutter beside a cue puts the
+ * caret on that line, as it would in any editor.
+ */
+.screenplay [data-el='scene_heading'] {
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* A blank line before every slug, so scenes separate visually the way they do
+   on the page. Not on the first, which would push the script off its top. */
+.screenplay [data-el='scene_heading']:not(:first-child) {
+  margin-top: 1.2em;
+}
+
+.screenplay [data-el='character'] {
+  padding-left: 22ch;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.screenplay [data-el='parenthetical'] {
+  padding-left: 15ch;
+  padding-right: 15ch;
+  color: var(--text-muted);
+}
+
+.screenplay [data-el='dialogue'] {
+  padding-left: 10ch;
+  padding-right: 15ch;
+}
+
+.screenplay [data-el='transition'] {
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.screenplay [data-el='centered'] {
+  text-align: center;
+}
+
+.screenplay [data-el='lyrics'] {
+  padding-left: 10ch;
+  padding-right: 15ch;
+  font-style: italic;
+}
+
+/* Non-printing lines. Fountain's own `#` sections and `=` synopses, and this
+   editor's `{{section:…}}` range markers, are notes to the writer — dimmed so
+   they read as scaffolding rather than script. This is Slugline's convention
+   for the characters that won't appear in the printed screenplay. */
+.screenplay [data-el='note'],
+.screenplay [data-el='marker'] {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.screenplay [data-el='title_page'] {
+  color: var(--text-muted);
+}
+
+/* A forced page break (`===`) is a rule, not a row of equals signs. */
+.screenplay [data-el='page_break'] {
+  color: var(--text-faint);
+  letter-spacing: 0.3em;
+}
+
+/*
+ * Below ~500px the 60ch measure stops fitting even at the editor's 12px floor
+ * (60ch is 36 × the font size), so the indents shrink to something a phone, a
+ * narrow split, or a note's sidebar can hold. The casing and weight cues stay
+ * — they're what identify an element at a glance; only the geometry goes.
+ */
+@container screenplay (max-width: 500px) {
+  .screenplay [data-el='character'] {
+    padding-left: 10ch;
+  }
+  .screenplay [data-el='parenthetical'] {
+    padding-left: 6ch;
+    padding-right: 0;
+  }
+  .screenplay [data-el='dialogue'],
+  .screenplay [data-el='lyrics'] {
+    padding-left: 4ch;
+    padding-right: 0;
+  }
+}
+

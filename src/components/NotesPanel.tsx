@@ -9,7 +9,8 @@ import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPl
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin'
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import type { EditorState, LexicalEditor } from 'lexical'
+import type { EditorState, LexicalEditor, LexicalNode } from 'lexical'
+import { $getRoot, $getSelection, $isRangeSelection } from 'lexical'
 import {
   ListNode,
   ListItemNode,
@@ -29,6 +30,8 @@ import {
   sortedNotes,
   textFromBlock,
 } from '../notes'
+// ScriptRefView lays its lines out with the editor's element geometry.
+import './screenplay.css'
 import './NotesPanel.css'
 
 // The list vocabulary a note supports — checklists ("- [ ] ") and bullets
@@ -468,12 +471,49 @@ function NoteView({
     activeEditorRef.current?.dispatchCommand(command, undefined)
   }
 
-  // Splice a block in after the focused text run, with a fresh run below it so
-  // there's somewhere to keep writing — the same placement media uses.
+  /**
+   * Put a block where the caret is.
+   *
+   * A block can't sit *inside* a paragraph, so "at the caret" means splitting
+   * the focused text run: the paragraphs above the caret stay, the block goes
+   * next, and the paragraphs below it become a new run. Appending after the
+   * whole run — which is what media insertion does — drops the block past
+   * text the writer meant it to precede.
+   *
+   * With nothing focused, or with the caret already in the run's last
+   * paragraph, there's nothing to split and this is a plain insert after it.
+   */
   function insertBlock(block: NoteBlock) {
     const nowTs = Date.now()
     const fid = focusedBlockRef.current
     const idx = fid !== null ? note.blocks.findIndex((b) => b.id === fid) : -1
+
+    if (idx >= 0) {
+      const split = splitRunAtCaret(activeEditorRef.current)
+      if (split !== null) {
+        // Both halves get fresh ids. A text run's editor is uncontrolled —
+        // seeded once from `value` and keyed by block id — so reusing the id
+        // for the shortened half would leave that editor showing the original
+        // text, and its next keystroke would write the whole thing back over
+        // the split. A new id remounts it against the new content.
+        const above = makeTextBlock(nowTs, split.before)
+        const below = makeTextBlock(nowTs, split.after)
+        const blocks = normalizeBlocks(
+          [
+            ...note.blocks.slice(0, idx),
+            above,
+            block,
+            below,
+            ...note.blocks.slice(idx + 1),
+          ],
+          nowTs,
+        )
+        setFocusBlockId(below.id)
+        onChangeNote(note.id, { blocks })
+        return
+      }
+    }
+
     const at = idx >= 0 ? idx + 1 : note.blocks.length
     const after = makeTextBlock(nowTs)
     const blocks = normalizeBlocks(
@@ -817,10 +857,11 @@ function MediaBlockView({
 /**
  * A quoted stretch of screenplay, rendered as a minimal code block.
  *
- * Deliberately plain: a header saying where it came from, then the lines in
- * the editor's own monospace with their source numbers in a gutter. The point
- * is that it reads as *quoted material* — visibly not part of the note's own
- * prose — and that the numbers let you find it again in the script.
+ * A header saying where it came from, then the lines themselves — laid out by
+ * the same rules the editor uses (screenplay.css), so a cue sits where a cue
+ * sits and dialogue is inset, with the source line numbers in a gutter. The
+ * point is that it reads as *quoted screenplay* — visibly not the note's own
+ * prose — and that the numbers let you find it again.
  *
  * The text is a snapshot and never re-resolved against the current draft. That
  * is the whole reason this replaced commenting: it can't go stale-but-silent,
@@ -864,16 +905,23 @@ function ScriptRefView({
           <CloseIcon />
         </button>
       </figcaption>
-      <pre className="scriptref__body">
+      <div className="scriptref__body screenplay">
         {lines.map((line, i) => (
-          <span key={i} className="scriptref__line">
+          <div key={i} className="scriptref__line">
             <span className="scriptref__num" aria-hidden="true">
               {block.startLine + i + 1}
             </span>
-            <span className="scriptref__text">{line === '' ? '\u00a0' : line}</span>
-          </span>
+            {/* Same `data-el` contract the editor's lines use, so
+                screenplay.css lays this out identically. */}
+            <span
+              className="scriptref__text"
+              data-el={block.types?.[i] ?? 'action'}
+            >
+              {line === '' ? '\u00a0' : line}
+            </span>
+          </div>
         ))}
-      </pre>
+      </div>
     </figure>
   )
 }
@@ -897,4 +945,57 @@ function CloseIcon() {
       <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   )
+}
+
+/**
+ * Split a text run's serialized state at the caret's paragraph.
+ *
+ * Returns the two halves, or null when there is nothing below the caret (the
+ * caller can just insert after the run) or when the caret can't be located.
+ *
+ * The split is at paragraph granularity because that's the finest an inserted
+ * *block* can be: it has to break the flow somewhere, and breaking it at the
+ * caret's paragraph boundary is what "here" means for something that isn't
+ * inline. Working on the serialized JSON rather than mutating the live editor
+ * keeps this a pure read — the run is replaced wholesale by the caller, so
+ * there's no half-applied state if anything goes wrong.
+ */
+function splitRunAtCaret(
+  editor: LexicalEditor | null,
+): { before: string; after: string } | null {
+  if (editor === null) return null
+  let out: { before: string; after: string } | null = null
+
+  editor.getEditorState().read(() => {
+    const selection = $getSelection()
+    if (!$isRangeSelection(selection)) return
+    const root = $getRoot()
+
+    // Walk up from the caret to the top-level paragraph holding it.
+    let top: LexicalNode | null = selection.focus.getNode()
+    while (top !== null) {
+      const parent: LexicalNode | null = top.getParent()
+      if (parent === null) return
+      if (parent.getKey() === root.getKey()) break
+      top = parent
+    }
+    if (top === null) return
+
+    const children = root.getChildren()
+    const index = children.findIndex((c) => c.getKey() === top.getKey())
+    if (index < 0 || index >= children.length - 1) return // nothing below
+
+    const json = editor.getEditorState().toJSON() as {
+      root: { children: unknown[] }
+    }
+    const kids = json.root.children
+    const cut = index + 1
+    if (cut >= kids.length) return
+
+    const half = (slice: unknown[]) =>
+      JSON.stringify({ ...json, root: { ...json.root, children: slice } })
+    out = { before: half(kids.slice(0, cut)), after: half(kids.slice(cut)) }
+  })
+
+  return out
 }

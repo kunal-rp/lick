@@ -61,6 +61,17 @@ export interface ScriptRefBlock {
   endLine: number
   /** The lines as they read when quoted. Display only — never re-resolved. */
   text: string
+  /**
+   * What each quoted line *is* — scene heading, dialogue, and so on — captured
+   * alongside the text so the quote lays out exactly as it did in the editor.
+   *
+   * Stored rather than recomputed because classification depends on context a
+   * fragment doesn't have: a line of dialogue is only dialogue because a
+   * character cue precedes it, so re-parsing three lines lifted from the
+   * middle of a scene would call them action. One entry per line of `text`;
+   * absent on references captured before this existed.
+   */
+  types?: string[]
   createdAt: number
 }
 
@@ -110,6 +121,7 @@ export function makeScriptRefBlock(
     startLine: number
     endLine: number
     text: string
+    types?: string[]
   },
 ): ScriptRefBlock {
   return { id: makeId(now), type: 'script-ref', ...ref, createdAt: now }
@@ -243,6 +255,7 @@ function parseBlock(raw: unknown, now: number): NoteBlock | null {
     versionLabel?: unknown
     startLine?: unknown
     endLine?: unknown
+    types?: unknown
     createdAt?: unknown
   }
   const id = typeof b.id === 'string' ? b.id : makeId(now)
@@ -252,6 +265,9 @@ function parseBlock(raw: unknown, now: number): NoteBlock | null {
     // as an empty block the reader can't act on.
     if (typeof b.versionId !== 'string' || typeof b.text !== 'string') return null
     const startLine = typeof b.startLine === 'number' ? b.startLine : 0
+    const types = Array.isArray(b.types)
+      ? (b.types as unknown[]).filter((t): t is string => typeof t === 'string')
+      : undefined
     return {
       id,
       type: 'script-ref',
@@ -260,6 +276,7 @@ function parseBlock(raw: unknown, now: number): NoteBlock | null {
       startLine,
       endLine: typeof b.endLine === 'number' ? b.endLine : startLine,
       text: b.text,
+      types,
       createdAt: typeof b.createdAt === 'number' ? b.createdAt : now,
     }
   }

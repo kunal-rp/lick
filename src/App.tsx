@@ -49,7 +49,7 @@ import {
   type HistorySnapshot,
   type SnapshotKind,
 } from './history'
-import { parseSections } from './fountain'
+import { lineTypes, parseSections } from './fountain'
 import { buildScreenplayPdf } from './pdf'
 import {
   NOTES_FILENAME,
@@ -724,12 +724,17 @@ export default function App() {
     const start = Math.max(0, scriptSelection.startLine)
     const end = Math.min(lines.length - 1, scriptSelection.endLine)
     if (start > end) return null
+    // Classify against the whole script, then take the slice: a cue's dialogue
+    // is only dialogue because the cue precedes it, so classifying the extract
+    // on its own would read it as action.
+    const types = lineTypes(source).slice(start, end + 1)
     return makeScriptRefBlock(Date.now(), {
       versionId: selectedVersionId,
       versionLabel: label,
       startLine: start,
       endLine: end,
       text: lines.slice(start, end + 1).join('\n'),
+      types,
     })
   }
 

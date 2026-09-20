@@ -627,11 +627,10 @@
 }
 
 .scriptref__body {
-  margin: 0;
-  padding: 8px 0;
-  /* The quote keeps the script's own line breaks; long lines scroll rather
-     than rewrap, so the numbers stay aligned with what they number. */
-  overflow-x: auto;
+  /* The reference is its own screenplay container, so the indents in
+     screenplay.css respond to the note pane's width rather than the editor's. */
+  container: screenplay / inline-size;
+  padding: 8px 12px 8px 0;
   font-family: 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.6;
@@ -640,8 +639,8 @@
 
 .scriptref__line {
   display: flex;
+  align-items: baseline;
   gap: 10px;
-  white-space: pre;
 }
 
 .scriptref__num {
@@ -655,6 +654,15 @@
   user-select: none;
 }
 
+/*
+ * The quoted line. It wraps rather than scrolling: a note pane is narrow, and
+ * a horizontal scrollbar would mean every long line of action had to be
+ * dragged into view one at a time — while the line numbers beside them stayed
+ * put, pointing at nothing.
+ */
 .scriptref__text {
-  padding-right: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

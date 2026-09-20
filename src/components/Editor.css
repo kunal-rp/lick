@@ -220,9 +220,9 @@
 
 .editor__surface {
   position: relative;
-  /* Reference for the @container query on the indents below: the editor's own
+  /* Reference for the @container queries in screenplay.css: the editor's own
      width, not the window's — the split pane makes those different. */
-  container: editor / inline-size;
+  container: screenplay / inline-size;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -273,6 +273,14 @@
   tab-size: 4;
   white-space: pre-wrap;
   caret-color: var(--accent);
+}
+
+/* Below the breakpoint the block gives up its fixed measure (screenplay.css
+   shrinks the indents to match). */
+@container screenplay (max-width: 500px) {
+  .editor__content {
+    max-width: 100%;
+  }
 }
 
 /* Page-break guides: a subtle dashed line where each page ends. */
@@ -375,116 +383,10 @@
 }
 
 /*
- * Screenplay formatting, in place.
- *
- * LineFormatPlugin tags each line's paragraph with `data-el` — what that line
- * will print as — and these rules lay it out accordingly, so the editor shows
- * a script instead of raw markup sitting beside a rendered copy of itself.
- *
- * Measurements are the standard US screenplay ones, converted from inches at
- * 10 characters to the inch and expressed relative to the 60ch text block (so
- * "1in from the block's left edge" is 10ch, not 1in of screen):
- *
- *            page      from block   width
- *   action    1.5in        0ch       60ch
- *   dialogue  2.5in       10ch       35ch
- *   paren     3.0in       15ch       30ch
- *   cue       3.7in       22ch         —
- *   trans     6.0in         —      flush right
- *
- * Indents are `padding` rather than `margin` so each line's clickable box
- * still spans the full column — clicking in the gutter beside a cue puts the
- * caret on that line, as it would in any editor.
+ * Screenplay element geometry lives in screenplay.css, under the `.screenplay`
+ * class this editor's content carries — a quoted reference inside a note needs
+ * the identical layout, and two copies of these measurements would drift.
  */
-.editor__content [data-el='scene_heading'] {
-  text-transform: uppercase;
-  font-weight: 700;
-  color: var(--text);
-}
-
-/* A blank line before every slug, so scenes separate visually the way they do
-   on the page. Not on the first, which would push the script off its top. */
-.editor__content [data-el='scene_heading']:not(:first-child) {
-  margin-top: 1.2em;
-}
-
-.editor__content [data-el='character'] {
-  padding-left: 22ch;
-  text-transform: uppercase;
-  color: var(--text);
-}
-
-.editor__content [data-el='parenthetical'] {
-  padding-left: 15ch;
-  padding-right: 15ch;
-  color: var(--text-muted);
-}
-
-.editor__content [data-el='dialogue'] {
-  padding-left: 10ch;
-  padding-right: 15ch;
-}
-
-.editor__content [data-el='transition'] {
-  text-align: right;
-  text-transform: uppercase;
-}
-
-.editor__content [data-el='centered'] {
-  text-align: center;
-}
-
-.editor__content [data-el='lyrics'] {
-  padding-left: 10ch;
-  padding-right: 15ch;
-  font-style: italic;
-}
-
-/* Non-printing lines. Fountain's own `#` sections and `=` synopses, and this
-   editor's `{{section:…}}` range markers, are notes to the writer — dimmed so
-   they read as scaffolding rather than script. This is Slugline's convention
-   for the characters that won't appear in the printed screenplay. */
-.editor__content [data-el='note'],
-.editor__content [data-el='marker'] {
-  color: var(--text-faint);
-  font-style: italic;
-}
-
-.editor__content [data-el='title_page'] {
-  color: var(--text-muted);
-}
-
-/* A forced page break (`===`) is a rule, not a row of equals signs. */
-.editor__content [data-el='page_break'] {
-  color: var(--text-faint);
-  letter-spacing: 0.3em;
-}
-
-/*
- * Below ~500px the 60ch block stops fitting even at the clamp's 12px floor
- * (60ch is 36 × the font size, plus the padding), so the block gives up its
- * fixed measure and the indents shrink to something a phone or a narrow split
- * can hold. The casing and weight cues stay — they're what identify an element
- * at a glance; only the geometry goes.
- */
-@container editor (max-width: 500px) {
-  .editor__content {
-    max-width: 100%;
-  }
-
-  .editor__content [data-el='character'] {
-    padding-left: 10ch;
-  }
-  .editor__content [data-el='parenthetical'] {
-    padding-left: 6ch;
-    padding-right: 0;
-  }
-  .editor__content [data-el='dialogue'],
-  .editor__content [data-el='lyrics'] {
-    padding-left: 4ch;
-    padding-right: 0;
-  }
-}
 
 /* Capitalization checker: an underlay of clickable underlines over any text
  * whose capitalization departs from screenplay format. The layer itself is

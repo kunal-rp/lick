@@ -19,6 +19,7 @@ import { LineFormatPlugin } from './lexical/plugins/LineFormatPlugin'
 import { LineParagraphsPlugin } from './lexical/plugins/LineParagraphsPlugin'
 import { seedFrom } from './lexical/document'
 import type { Section } from '../fountain'
+import './screenplay.css'
 import './Editor.css'
 
 interface EditorProps {
@@ -112,7 +113,10 @@ export function Editor({
           <LineFormatPlugin />
           <PlainTextPlugin
             contentEditable={
-              <ContentEditable className="editor__content" spellCheck={true} />
+              <ContentEditable
+                className="editor__content screenplay"
+                spellCheck={true}
+              />
             }
             placeholder={
               <div className="editor__placeholder">
