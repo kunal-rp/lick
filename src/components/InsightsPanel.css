@@ -304,3 +304,45 @@
   width: 13px;
   height: 13px;
 }
+
+/*
+ * Sidebar-tab mode: the tab rail already names the panel and gives it its
+ * height, so the strip's own chrome (header bar, border, fixed max-height)
+ * would just be a second frame inside the first.
+ */
+.insights--embedded {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  border: none;
+}
+
+/*
+ * Characters and Locations sit side by side when this panel is a wide strip
+ * under the preview. In a ~260px sidebar two columns leave about 14 characters
+ * each, which turns every name into an ellipsis ("DES…", "M."). Stack them
+ * instead and let the column scroll.
+ */
+.insights--embedded .insights__body {
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.insights--embedded .insights__group {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.insights--embedded .insights__group + .insights__group {
+  border-left: none;
+  border-top: 1px solid var(--border);
+}
+
+/* The toggles wrap rather than overflowing the narrower column. */
+.insights--embedded .insights__toggles {
+  flex-wrap: wrap;
+  padding: 8px 10px;
+}

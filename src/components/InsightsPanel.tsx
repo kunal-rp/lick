@@ -1,19 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { analyzeScript, type Reference, type Section } from '../fountain'
+import { analyzeScript, type Reference } from '../fountain'
 import type { InsightsGroups } from '../layout'
 import { ChevronDownIcon, ChevronRightIcon } from './icons'
 import './InsightsPanel.css'
 
 interface InsightsPanelProps {
   source: string
-  /** Fill the available height (true when it's the only panel showing). */
-  grow?: boolean
   /** Jump the editor to a source line when a reference is clicked. */
   onJump?: (line: number) => void
-  /** Initial collapsed state (restored from saved layout). */
-  initialCollapsed?: boolean
-  /** Reports the collapsed state when the user toggles it. */
-  onCollapsedChange?: (collapsed: boolean) => void
   /** Which groups are shown, restored from saved layout. */
   initialGroups?: InsightsGroups
   /** Reports group visibility when the user toggles a chip. */
@@ -21,30 +15,35 @@ interface InsightsPanelProps {
 }
 
 const ALL_GROUPS: InsightsGroups = {
-  sections: true,
   characters: true,
   locations: true,
 }
 
 /**
- * Characters & Locations panel: a collapsible tracker that lists every speaking
- * character and every location in the script. Each entry expands to show its
- * references — the scenes, source lines, and snippets where it occurs.
+ * The sidebar's Cast tab: every speaking character and every location in the
+ * script. Each entry expands to show its references — the scenes, source
+ * lines, and snippets where it occurs — and clicking one jumps the editor
+ * there.
+ *
+ * It used to be a collapsible strip wedged under the preview, which meant the
+ * app's only jump-to-line surface existed only while the preview did, and
+ * arrived collapsed. As a sidebar tab it's always available and always open;
+ * the collapse machinery went with the strip.
+ *
+ * Sections are deliberately not listed here — that's the Outline tab's job,
+ * and two places showing the same structure only invites them to disagree
+ * about which is the place to look.
  */
 export function InsightsPanel({
   source,
-  grow = false,
   onJump,
-  initialCollapsed = false,
-  onCollapsedChange,
   initialGroups = ALL_GROUPS,
   onGroupsChange,
 }: InsightsPanelProps) {
-  const { characters, locations, sections } = useMemo(
+  const { characters, locations } = useMemo(
     () => analyzeScript(source),
     [source],
   )
-  const [collapsed, setCollapsed] = useState(initialCollapsed)
   const [groups, setGroups] = useState<InsightsGroups>(initialGroups)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -64,74 +63,23 @@ export function InsightsPanel({
     })
 
   return (
-    <div
-      className={`insights${collapsed ? ' insights--collapsed' : ''}${
-        grow ? ' insights--grow' : ''
-      }`}
-    >
-      <button
-        type="button"
-        className="insights__bar"
-        onClick={() => {
-          setCollapsed((c) => !c)
-          onCollapsedChange?.(!collapsed)
-        }}
-        aria-expanded={!collapsed}
-      >
-        <span className="insights__chevron">
-          {collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
-        </span>
-        <span className="insights__title">Characters &amp; Locations</span>
-        {collapsed && (
-          <span className="insights__summary">
-            {characters.length} chars · {locations.length} locs
-            {sections.length > 0 && ` · ${sections.length} sec`}
-          </span>
-        )}
-      </button>
+    <div className="insights insights--embedded">
+      <div className="insights__toggles" role="group" aria-label="Show groups">
+        <GroupToggle
+          label="Characters"
+          count={characters.length}
+          active={groups.characters}
+          onToggle={() => toggleGroup('characters')}
+        />
+        <GroupToggle
+          label="Locations"
+          count={locations.length}
+          active={groups.locations}
+          onToggle={() => toggleGroup('locations')}
+        />
+      </div>
 
-      {!collapsed && (
-        <div className="insights__toggles" role="group" aria-label="Show groups">
-          <GroupToggle
-            label="Sections"
-            count={sections.length}
-            active={groups.sections}
-            onToggle={() => toggleGroup('sections')}
-          />
-          <GroupToggle
-            label="Characters"
-            count={characters.length}
-            active={groups.characters}
-            onToggle={() => toggleGroup('characters')}
-          />
-          <GroupToggle
-            label="Locations"
-            count={locations.length}
-            active={groups.locations}
-            onToggle={() => toggleGroup('locations')}
-          />
-        </div>
-      )}
-
-      {!collapsed && (
-        <div className="insights__body">
-          {groups.sections && sections.length > 0 && (
-            <Group title="Sections" count={sections.length}>
-              {sections.map((s) => {
-                const key = `sec:${s.id}`
-                return (
-                  <SectionRow
-                    key={key}
-                    section={s}
-                    open={expanded.has(key)}
-                    onToggle={() => toggle(key)}
-                    onJump={onJump}
-                  />
-                )
-              })}
-            </Group>
-          )}
-
+      <div className="insights__body">
           {groups.characters && (
             <Group title="Characters" count={characters.length}>
               {characters.map((c) => {
@@ -183,13 +131,12 @@ export function InsightsPanel({
             </Group>
           )}
 
-          {!groups.sections && !groups.characters && !groups.locations && (
+          {!groups.characters && !groups.locations && (
             <p className="insights__all-hidden">
-              All groups hidden. Use the toggles above to show them.
+              Both groups hidden. Use the toggles above to show them.
             </p>
           )}
-        </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -238,92 +185,6 @@ function Group({
         <p className="insights__empty">None found.</p>
       ) : (
         <div className="insights__list">{children}</div>
-      )}
-    </div>
-  )
-}
-
-function SectionRow({
-  section,
-  open,
-  onToggle,
-  onJump,
-}: {
-  section: Section
-  open: boolean
-  onToggle: () => void
-  onJump?: (line: number) => void
-}) {
-  const span =
-    section.startLine === section.endLine
-      ? `L${section.startLine + 1}`
-      : `L${section.startLine + 1}–L${section.endLine + 1}`
-  // Indent nested ranges so the hierarchy reads at a glance.
-  const indent = { marginLeft: section.depth * 12 }
-  return (
-    <div
-      className={`insights__entity insights__entity--section${
-        open ? ' insights__entity--open' : ''
-      }`}
-      style={indent}
-    >
-      <button
-        type="button"
-        className="insights__entity-head"
-        onClick={onToggle}
-        aria-expanded={open}
-      >
-        <span className="insights__entity-chevron">
-          {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
-        </span>
-        <span
-          className="insights__section-swatch"
-          style={{ background: section.color }}
-          aria-hidden="true"
-        />
-        <span className="insights__entity-name">{section.label}</span>
-        <span className="insights__badges">
-          <span className="insights__badge" title="source line span">
-            {span}
-          </span>
-        </span>
-      </button>
-      {open && (
-        <div className="insights__section-body">
-          {section.description !== '' && (
-            <p className="insights__section-desc">{section.description}</p>
-          )}
-          <ul className="insights__refs">
-            <li>
-              <button
-                type="button"
-                className="insights__ref"
-                title="Jump to the start of this section"
-                onClick={() => onJump?.(section.startLine)}
-              >
-                <span className="insights__ref-meta">
-                  <span className="insights__ref-scene">Start</span>
-                  <span className="insights__ref-line">L{section.startLine + 1}</span>
-                </span>
-                <span className="insights__ref-snippet">{section.label}</span>
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                className="insights__ref"
-                title="Jump to the end of this section"
-                onClick={() => onJump?.(section.endLine)}
-              >
-                <span className="insights__ref-meta">
-                  <span className="insights__ref-scene">End</span>
-                  <span className="insights__ref-line">L{section.endLine + 1}</span>
-                </span>
-                <span className="insights__ref-snippet">{section.label}</span>
-              </button>
-            </li>
-          </ul>
-        </div>
       )}
     </div>
   )

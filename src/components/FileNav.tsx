@@ -1,16 +1,11 @@
 import type { DriveFile } from '../drive/files'
 import { listPdfs, parseVersions } from '../drive/versions'
-import type { Theme } from '../theme'
 import {
   ChevronDownIcon,
-  ChevronLeftIcon,
   ChevronRightIcon,
   FilePdfIcon,
   FileTextIcon,
   FolderIcon,
-  MenuIcon,
-  MoonIcon,
-  SunIcon,
   TrashIcon,
 } from './icons'
 import './FileNav.css'
@@ -24,10 +19,6 @@ interface FileNavProps {
   selectedVersionId: string | null
   loading: boolean
   busy: boolean
-  collapsed: boolean
-  theme: Theme
-  onToggle: () => void
-  onToggleTheme: () => void
   onToggleExpand: (projectId: string) => void
   onSelectProject: (project: DriveFile) => void
   onSelectVersion: (projectId: string, versionId: string) => void
@@ -37,8 +28,12 @@ interface FileNavProps {
 }
 
 /**
- * Collapsible left panel showing the full project directory as a tree:
- * project folders with their version files nested underneath.
+ * The sidebar's Files tab: the whole working folder as a tree — project folders
+ * with their drafts nested underneath.
+ *
+ * The panel chrome it used to carry (brand header, collapse button, theme
+ * toggle, backdrop) now belongs to the Sidebar shell, which wraps all four
+ * tabs; this is just the body.
  */
 export function FileNav({
   folderName,
@@ -49,10 +44,6 @@ export function FileNav({
   selectedVersionId,
   loading,
   busy,
-  collapsed,
-  theme,
-  onToggle,
-  onToggleTheme,
   onToggleExpand,
   onSelectProject,
   onSelectVersion,
@@ -60,38 +51,8 @@ export function FileNav({
   onNewProject,
   onChangeFolder,
 }: FileNavProps) {
-  if (collapsed) {
-    return (
-      <aside className="filenav filenav--collapsed">
-        <button
-          type="button"
-          className="filenav__icon-btn"
-          title="Show project"
-          onClick={onToggle}
-        >
-          <MenuIcon />
-        </button>
-      </aside>
-    )
-  }
-
   return (
-    <>
-      {/* Mobile only: tapping the dimmed backdrop closes the drawer. */}
-      <div className="filenav__backdrop" onClick={onToggle} aria-hidden="true" />
-      <aside className="filenav">
-      <div className="filenav__header">
-        <span className="filenav__brand">kunal's scripts</span>
-        <button
-          type="button"
-          className="filenav__icon-btn"
-          title="Hide panel"
-          onClick={onToggle}
-        >
-          <ChevronLeftIcon />
-        </button>
-      </div>
-
+    <div className="filenav">
       <div className="filenav__actions">
         <button
           type="button"
@@ -107,18 +68,6 @@ export function FileNav({
           onClick={onChangeFolder}
         >
           Change folder
-        </button>
-        <button
-          type="button"
-          className="filenav__theme"
-          onClick={onToggleTheme}
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-        >
-          <span className="filenav__theme-glyph" aria-hidden="true">
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-          </span>
-          {theme === 'dark' ? 'Light theme' : 'Dark theme'}
         </button>
       </div>
 
@@ -219,7 +168,6 @@ export function FileNav({
           </div>
         )}
       </div>
-      </aside>
-    </>
+    </div>
   )
 }

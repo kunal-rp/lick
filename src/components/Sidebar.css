@@ -1,0 +1,175 @@
+.sidebar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  min-height: 0;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--border);
+}
+
+/*
+ * Collapsed, the panel becomes a bare icon rail rather than disappearing. The
+ * tabs stay clickable, so reopening lands on the panel you want instead of
+ * whichever one happened to be open last.
+ */
+.sidebar--collapsed {
+  width: 40px;
+  align-items: center;
+  gap: 2px;
+  padding-top: 8px;
+}
+
+.sidebar__railbtn,
+.sidebar__iconbtn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.sidebar__railbtn svg,
+.sidebar__iconbtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sidebar__railbtn:hover,
+.sidebar__iconbtn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.sidebar__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 8px 8px 12px;
+}
+
+.sidebar__brand {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar__tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+  padding: 0 8px 8px;
+}
+
+.sidebar__tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 2px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.sidebar__tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sidebar__tab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.sidebar__tab--active,
+.sidebar__tab--active:hover {
+  background: var(--raised);
+  color: var(--text);
+  /* --raised sits a hair off --panel-bg in the light theme, which on its own
+     is not enough to tell you which tab you're on. The accent underline is
+     what actually carries the state. */
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.sidebar__tab--active svg {
+  color: var(--accent);
+}
+
+.sidebar__tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+/* The Notes tab brings its own full-height column and scroller, so the body
+   must not add a second one around it. */
+.sidebar__body > .notes {
+  height: 100%;
+}
+
+.sidebar__backdrop {
+  display: none;
+}
+
+/*
+ * Mobile: the sidebar is a drawer over the editor. It carries Files, Outline,
+ * Notes and Cast — everything you consult rather than type into — so the top
+ * bar's segmented control is left to switch between writing and reading pages.
+ */
+@media (max-width: 768px) {
+  .sidebar--collapsed {
+    display: none;
+  }
+
+  .sidebar:not(.sidebar--collapsed) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 60;
+    /* Fixed elements ignore flex-basis, so set an explicit drawer width. */
+    width: min(330px, 88vw);
+    box-shadow: 2px 0 16px rgba(0, 0, 0, 0.35);
+  }
+
+  .sidebar__backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  /* Touch targets: the tabs are the drawer's primary control at this width. */
+  .sidebar__tab {
+    padding: 9px 2px;
+    font-size: 11px;
+  }
+}

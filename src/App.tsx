@@ -4,6 +4,8 @@ import { Preview } from './components/Preview'
 import { InsightsPanel } from './components/InsightsPanel'
 import { SplitPane } from './components/SplitPane'
 import { FileNav } from './components/FileNav'
+import { Sidebar } from './components/Sidebar'
+import { OutlinePanel } from './components/OutlinePanel'
 import { VersionBar } from './components/VersionBar'
 import { HistoryPanel } from './components/HistoryPanel'
 import { NotesPanel } from './components/NotesPanel'
@@ -66,8 +68,8 @@ import {
 import { useDriveAuth } from './drive/useDriveAuth'
 import { useWorkingFolder } from './drive/useWorkingFolder'
 import { loadLastOpened, saveLastOpened } from './lastOpened'
-import { loadLayout, saveLayout, type RightTab } from './layout'
-import { loadTheme, saveTheme, type Theme } from './theme'
+import { loadLayout, saveLayout, type SidebarTab } from './layout'
+import { beginThemeFade, loadTheme, saveTheme, type Theme } from './theme'
 import { MenuIcon } from './components/icons'
 import { useIsMobile } from './useIsMobile'
 import { useAppViewportHeight } from './useAppViewportHeight'
@@ -146,17 +148,18 @@ export default function App() {
   // Light/dark theme, applied to <html> as data-theme and persisted.
   const [theme, setTheme] = useState<Theme>(loadTheme)
 
-  // The workspace is one editor plus one right pane. `rightTab` says what
-  // occupies that pane — Preview and Notes are peers sharing the slot — or null
-  // when the editor fills the window. `zoomed` temporarily gives one side the
-  // whole window: 'right' for a full-window preview or a long notes session,
-  // 'left' for distraction-free writing.
+  // The workspace is a sidebar, an editor, and optionally the pages beside it.
+  // `sidebarTab` says which reference panel the sidebar shows; `showPreview`
+  // says whether the pages are up. `zoomed` temporarily gives one side the
+  // whole window: 'right' for a full-window read, 'left' for writing.
   //
-  // Deliberately NOT persisted: a maximized pane is a posture you adopt for a
-  // few minutes, not a layout you want to find again after a reload.
-  const [rightTab, setRightTab] = useState<RightTab | null>(
-    layoutRef.current.rightTab,
+  // `zoomed` is deliberately NOT persisted: a maximized pane is a posture you
+  // adopt for a few minutes, not a layout you want to find again after a
+  // reload. The other two are.
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(
+    layoutRef.current.sidebarTab,
   )
+  const [showPreview, setShowPreview] = useState(layoutRef.current.showPreview)
   const [zoomed, setZoomed] = useState<'left' | 'right' | null>(null)
 
   // Whether section ranges are rendered over the preview pages (toolbar toggle).
@@ -323,8 +326,15 @@ export default function App() {
     }
   }, [folderId, auth.status])
 
-  // Apply and persist the theme.
+  // Apply and persist the theme. The cross-fade is switched on just for the
+  // duration of the change (see beginThemeFade) so it doesn't slow every other
+  // hover and selection in the app.
+  const firstTheme = useRef(true)
   useEffect(() => {
+    // Not on mount: there's nothing to fade from, and fading the first paint
+    // just makes the app look like it's still loading.
+    if (firstTheme.current) firstTheme.current = false
+    else beginThemeFade()
     document.documentElement.setAttribute('data-theme', theme)
     saveTheme(theme)
   }, [theme])
@@ -340,10 +350,11 @@ export default function App() {
   // absent — see its declaration.)
   useEffect(() => {
     layoutRef.current.navCollapsed = navCollapsed
-    layoutRef.current.rightTab = rightTab
+    layoutRef.current.sidebarTab = sidebarTab
+    layoutRef.current.showPreview = showPreview
     layoutRef.current.showSections = showSections
     saveLayout(layoutRef.current)
-  }, [navCollapsed, rightTab, showSections])
+  }, [navCollapsed, sidebarTab, showPreview, showSections])
 
   // Entering mobile width, collapse the nav to its floating button so the
   // editor fills the screen; the drawer is a tap away. Widening back to desktop
@@ -694,32 +705,40 @@ export default function App() {
     return URL.createObjectURL(blob)
   }, [])
 
-  // Desktop: choose what fills the right pane. Picking the tab that's already
-  // showing collapses the pane, so each button is its own on/off switch. Any
-  // pick also drops a zoom — you asked to see that panel, not to keep whatever
-  // was maximized.
-  const selectRightTab = (tab: RightTab) => {
+  // Desktop: show or hide the pages beside the editor. Toggling them off also
+  // drops a zoom, so the control can't leave the workspace in a state where
+  // nothing is expanded but `zoomed` still says something is.
+  const togglePreview = () => {
     setShowHistory(false)
-    setRightTab((cur) => (cur === tab ? null : tab))
-    setZoomed(null)
+    setShowPreview((on) => {
+      if (on) setZoomed(null)
+      return !on
+    })
   }
   const toggleZoom = () => setZoomed((z) => (z === 'right' ? null : 'right'))
 
   // Mobile is the same layout model, permanently maximized: one pane fills the
-  // screen and the top-bar control cycles Editor → Preview → Notes → Editor.
-  // Deriving it from `rightTab`/`zoomed` rather than keeping a parallel mobile
-  // state is what keeps the two from disagreeing when the window is resized.
-  type MobileView = 'editor' | 'preview' | 'notes'
+  // screen. Deriving the view from `showPreview`/`zoomed` rather than keeping a
+  // parallel mobile state is what keeps the two from disagreeing when the
+  // window is resized. Notes is not here — it lives in the sidebar drawer.
+  type MobileView = 'editor' | 'preview'
   const mobileView: MobileView =
-    zoomed === 'right' && rightTab !== null ? rightTab : 'editor'
+    zoomed === 'right' && showPreview ? 'preview' : 'editor'
   const setMobileView = (view: MobileView) => {
     setShowHistory(false)
     if (view === 'editor') {
       setZoomed('left')
     } else {
-      setRightTab(view)
+      setShowPreview(true)
       setZoomed('right')
     }
+  }
+
+  // Open the sidebar on a given tab — what the palette's "Show notes" and
+  // "Show outline" commands do, and what the collapsed rail's buttons do.
+  const openSidebar = (tab: SidebarTab) => {
+    setSidebarTab(tab)
+    setNavCollapsed(false)
   }
 
   // Bumped to ask the preview to (re)fit the page to the pane — driven from the
@@ -1110,24 +1129,50 @@ export default function App() {
       label: 'Show preview',
       group: 'View',
       keywords: 'pages render script',
-      run: () =>
-        isMobile ? setMobileView('preview') : (setRightTab('preview'), setZoomed(null)),
-    },
-    {
-      id: 'view-notes',
-      label: 'Show notes',
-      group: 'View',
-      keywords: 'notebook scratch',
-      run: () =>
-        isMobile ? setMobileView('notes') : (setRightTab('notes'), setZoomed(null)),
+      run: () => {
+        if (isMobile) {
+          setMobileView('preview')
+        } else {
+          setShowPreview(true)
+          setZoomed(null)
+        }
+      },
     },
     {
       id: 'fit-preview',
       label: 'Fit preview page to the pane',
       group: 'View',
       keywords: 'zoom scale width',
-      disabled: rightTab !== 'preview',
+      disabled: !showPreview,
       run: () => setFitNonce((n) => n + 1),
+    },
+    {
+      id: 'side-files',
+      label: 'Show files',
+      group: 'Sidebar',
+      keywords: 'projects drafts tree library',
+      run: () => openSidebar('files'),
+    },
+    {
+      id: 'side-outline',
+      label: 'Show outline',
+      group: 'Sidebar',
+      keywords: 'scenes sections structure navigator acts',
+      run: () => openSidebar('outline'),
+    },
+    {
+      id: 'side-notes',
+      label: 'Show notes',
+      group: 'Sidebar',
+      keywords: 'notebook scratch research',
+      run: () => openSidebar('notes'),
+    },
+    {
+      id: 'side-cast',
+      label: 'Show cast & locations',
+      group: 'Sidebar',
+      keywords: 'characters places who where',
+      run: () => openSidebar('cast'),
     },
     {
       id: 'toggle-sections',
@@ -1140,9 +1185,9 @@ export default function App() {
     },
     {
       id: 'toggle-nav',
-      label: (navCollapsed ? 'Show' : 'Hide') + ' project panel',
-      group: 'View',
-      keywords: 'sidebar files tree drawer',
+      label: (navCollapsed ? 'Show' : 'Hide') + ' sidebar',
+      group: 'Sidebar',
+      keywords: 'panel drawer rail collapse',
       run: () => setNavCollapsed((c) => !c),
     },
     {
@@ -1190,28 +1235,68 @@ export default function App() {
 
   return (
     <div className="workspace">
-      <FileNav
-        folderName={folder.name}
-        projects={projects}
-        versionsByProject={versionsByProject}
-        expandedProjects={expandedProjects}
-        selectedProjectId={selectedProjectId}
-        selectedVersionId={selectedVersionId}
-        loading={treeLoading}
-        busy={busy}
+      <Sidebar
+        tab={sidebarTab}
+        onSelectTab={setSidebarTab}
         collapsed={navCollapsed}
-        theme={theme}
         onToggle={() => setNavCollapsed((c) => !c)}
-        onToggleTheme={() =>
-          setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
-        }
-        onToggleExpand={toggleExpand}
-        onSelectProject={selectProject}
-        onSelectVersion={selectVersion}
-        onDeleteVersion={deleteVersion}
-        onNewProject={newProject}
-        onChangeFolder={() => choose()}
-      />
+        theme={theme}
+        onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+      >
+        {sidebarTab === 'files' ? (
+          <FileNav
+            folderName={folder.name}
+            projects={projects}
+            versionsByProject={versionsByProject}
+            expandedProjects={expandedProjects}
+            selectedProjectId={selectedProjectId}
+            selectedVersionId={selectedVersionId}
+            loading={treeLoading}
+            busy={busy}
+            onToggleExpand={toggleExpand}
+            onSelectProject={selectProject}
+            onSelectVersion={selectVersion}
+            onDeleteVersion={deleteVersion}
+            onNewProject={newProject}
+            onChangeFolder={() => choose()}
+          />
+        ) : sidebarTab === 'outline' ? (
+          <OutlinePanel
+            source={source}
+            onJump={(line) => {
+              jumpToLine(line)
+              // On a phone the drawer covers the editor it just moved, so get
+              // out of the way — the jump is the whole point of the tap.
+              if (isMobile) setNavCollapsed(true)
+            }}
+          />
+        ) : sidebarTab === 'notes' ? (
+          <NotesPanel
+            notes={notes}
+            onCreate={addNote}
+            onChangeNote={updateNote}
+            onDeleteNote={deleteNote}
+            onUploadMedia={uploadNoteMedia}
+            onDeleteMedia={deleteNoteMedia}
+            loadMedia={loadNoteMedia}
+            onClose={() => setNavCollapsed(true)}
+            busy={busy}
+          />
+        ) : (
+          <InsightsPanel
+            source={source}
+            onJump={(line) => {
+              jumpToLine(line)
+              if (isMobile) setNavCollapsed(true)
+            }}
+            initialGroups={layoutRef.current.insightsGroups}
+            onGroupsChange={(groups) => {
+              layoutRef.current.insightsGroups = groups
+              saveLayout(layoutRef.current)
+            }}
+          />
+        )}
+      </Sidebar>
       <div className="workspace__main">
         {error !== null && (
           <div className="workspace__error" role="alert">
@@ -1267,8 +1352,8 @@ export default function App() {
               }
               onSave={() => void persist()}
               onToggleNav={() => setNavCollapsed(false)}
-              rightTab={rightTab}
-              onSelectRightTab={selectRightTab}
+              showPreview={showPreview}
+              onTogglePreview={togglePreview}
               zoomed={zoomed === 'right'}
               onToggleZoom={toggleZoom}
               mobileView={mobileView}
@@ -1325,50 +1410,15 @@ export default function App() {
                     onDeleteComment={deleteComment}
                   />
                 )
-                const notesNode = (
-                  <NotesPanel
-                    notes={notes}
-                    onCreate={addNote}
-                    onChangeNote={updateNote}
-                    onDeleteNote={deleteNote}
-                    onUploadMedia={uploadNoteMedia}
-                    onDeleteMedia={deleteNoteMedia}
-                    loadMedia={loadNoteMedia}
-                    onClose={() => setRightTab(null)}
-                    busy={busy}
-                  />
-                )
+                // The right pane holds the pages and nothing else now. Notes
+                // and Characters & Locations moved to the sidebar, where they
+                // sit beside the files instead of taking turns with the
+                // preview for the same half of the window.
+                const rightNode = showPreview ? previewNode : null
 
-                // Whatever occupies the right pane. Preview brings the
-                // Characters & Locations panel along under it — it's consulted
-                // against the rendered pages, and it stays collapsed by default
-                // so it costs nothing until it's wanted.
-                const rightNode =
-                  rightTab === 'notes' ? (
-                    notesNode
-                  ) : rightTab === 'preview' ? (
-                    <div className="rightstack">
-                      <div className="rightstack__preview">{previewNode}</div>
-                      <InsightsPanel
-                        source={source}
-                        onJump={jumpToLine}
-                        initialCollapsed={layoutRef.current.insightsCollapsed}
-                        onCollapsedChange={(collapsed) => {
-                          layoutRef.current.insightsCollapsed = collapsed
-                          saveLayout(layoutRef.current)
-                        }}
-                        initialGroups={layoutRef.current.insightsGroups}
-                        onGroupsChange={(groups) => {
-                          layoutRef.current.insightsGroups = groups
-                          saveLayout(layoutRef.current)
-                        }}
-                      />
-                    </div>
-                  ) : null
-
-                // Mobile shows exactly one pane, always — the cycle control
-                // drives `zoomed`/`rightTab`, so the same two values describe
-                // both densities and can't drift apart.
+                // Mobile shows exactly one pane, always — the segmented
+                // control drives `showPreview`/`zoomed`, so the same two values
+                // describe both densities and can't drift apart.
                 if (isMobile) {
                   return zoomed === 'right' && rightNode !== null
                     ? rightNode

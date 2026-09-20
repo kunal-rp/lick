@@ -1,18 +1,21 @@
 import type { Version } from '../drive/versions'
-import type { RightTab } from '../layout'
 import { ViewSwitch, type ViewOption } from './ViewSwitch'
 import {
   CollapseIcon,
   CommandIcon,
   ExpandIcon,
   MenuIcon,
-  NoteIcon,
   PagesIcon,
   PenIcon,
 } from './icons'
 import './VersionBar.css'
 
-export type MobileView = 'editor' | 'preview' | 'notes'
+/**
+ * Mobile destinations. Notes is absent on purpose: it moved into the sidebar
+ * drawer with the files, outline and cast, leaving this control to answer the
+ * one question it should — am I writing, or reading pages?
+ */
+export type MobileView = 'editor' | 'preview'
 
 interface VersionBarProps {
   projectName: string
@@ -26,11 +29,10 @@ interface VersionBarProps {
   onSave: () => void
   /** Open the project drawer (mobile only; the button is hidden on desktop). */
   onToggleNav: () => void
-  /** What the right pane shows, or null when the editor fills the workspace. */
-  rightTab: RightTab | null
-  /** Pick the right pane's content; picking the active one collapses the pane. */
-  onSelectRightTab: (tab: RightTab) => void
-  /** Whether the right pane is expanded over the editor. */
+  /** Whether the preview pane sits beside the editor. */
+  showPreview: boolean
+  onTogglePreview: () => void
+  /** Whether the preview is expanded over the editor. */
   zoomed: boolean
   onToggleZoom: () => void
   /** Current mobile view; drives the segmented control (mobile only). */
@@ -41,18 +43,11 @@ interface VersionBarProps {
   onOpenCommands: () => void
 }
 
-// Desktop view switcher: the right pane's two occupants, as peers.
-const RIGHT_TABS: { key: RightTab; icon: JSX.Element; label: string }[] = [
-  { key: 'preview', icon: <PagesIcon />, label: 'Preview' },
-  { key: 'notes', icon: <NoteIcon />, label: 'Notes' },
-]
-
 // Mobile destinations, in reading order. Order matters: it's the order the
 // segments appear in, and the order the arrow keys walk.
 const VIEWS: ViewOption<MobileView>[] = [
   { key: 'editor', icon: <PenIcon />, label: 'Editor' },
   { key: 'preview', icon: <PagesIcon />, label: 'Preview' },
-  { key: 'notes', icon: <NoteIcon />, label: 'Notes' },
 ]
 
 /**
@@ -81,8 +76,8 @@ export function VersionBar({
   onSelectVersion,
   onSave,
   onToggleNav,
-  rightTab,
-  onSelectRightTab,
+  showPreview,
+  onTogglePreview,
   zoomed,
   onToggleZoom,
   mobileView,
@@ -161,43 +156,37 @@ export function VersionBar({
       <div className="verbar__spacer" />
 
       {/* Desktop view controls. These live here, in the app's own chrome,
-          rather than inside the editor's text toolbar: what occupies the right
-          pane is workspace state, not something you do to the document. Hidden
-          on mobile, where the segmented control at the far right does it. */}
-      <div className="verbar__views" role="group" aria-label="Right pane">
-        {RIGHT_TABS.map((t) => {
-          const active = rightTab === t.key
-          return (
-            <button
-              key={t.key}
-              type="button"
-              className={`verbar__view-btn${
-                active ? ' verbar__view-btn--active' : ''
-              }`}
-              onClick={() => onSelectRightTab(t.key)}
-              aria-pressed={active}
-              title={
-                active
-                  ? `Hide ${t.label.toLowerCase()} and let the editor fill the window`
-                  : `Show ${t.label.toLowerCase()} beside the editor`
-              }
-            >
-              {t.icon}
-              <span className="verbar__view-btn-label">{t.label}</span>
-            </button>
-          )
-        })}
+          rather than inside the editor's text toolbar: whether the pages are
+          showing is workspace state, not something you do to the document.
+          Hidden on mobile, where the segmented control does it. */}
+      <div className="verbar__views" role="group" aria-label="Preview">
+        <button
+          type="button"
+          className={`verbar__view-btn${
+            showPreview ? ' verbar__view-btn--active' : ''
+          }`}
+          onClick={onTogglePreview}
+          aria-pressed={showPreview}
+          title={
+            showPreview
+              ? 'Hide the pages and let the editor fill the window'
+              : 'Show the pages beside the editor'
+          }
+        >
+          <PagesIcon />
+          <span className="verbar__view-btn-label">Preview</span>
+        </button>
         <button
           type="button"
           className={`verbar__view-btn verbar__view-btn--zoom${
             zoomed ? ' verbar__view-btn--active' : ''
           }`}
           onClick={onToggleZoom}
-          disabled={rightTab === null}
+          disabled={!showPreview}
           aria-pressed={zoomed}
-          aria-label={zoomed ? 'Restore the split' : 'Expand the right pane'}
+          aria-label={zoomed ? 'Restore the split' : 'Expand the preview'}
           title={
-            rightTab === null
+            !showPreview
               ? 'Nothing to expand — the editor already fills the window'
               : zoomed
                 ? 'Back to the split view'

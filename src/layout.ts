@@ -6,70 +6,85 @@
 const KEY = 'fountain-editor:layout'
 
 /**
- * What the right pane shows. The editor always owns the left pane; the right
- * pane is a slot that Preview and Notes share as peers, and `null` collapses it
- * so the editor fills the workspace.
+ * Which panel the left sidebar shows. Files, Outline, Notes and Cast are tabs
+ * of one rail — everything you consult rather than type into.
  *
- * Deliberately one value rather than a boolean per panel: only one thing can
- * occupy the slot, so the state can't express a combination the layout can't
- * render.
+ * Notes used to share the *right* pane with the preview, which meant opening
+ * your notes destroyed your pages. Cast (Characters & Locations) was a
+ * collapsed strip underneath the preview, so the app's only jump-to-line
+ * surface existed only while the preview did. Both now sit beside the files,
+ * which is where every comparable app puts them.
  */
-export type RightTab = 'preview' | 'notes'
+export type SidebarTab = 'files' | 'outline' | 'notes' | 'cast'
 
 export interface LayoutPrefs {
-  /** Whether the left file-nav is collapsed. */
+  /** Whether the left sidebar is collapsed to its icon rail. */
   navCollapsed: boolean
-  /** What the right pane shows, or null when the editor fills the workspace. */
-  rightTab: RightTab | null
+  /** Which sidebar panel is showing. */
+  sidebarTab: SidebarTab
+  /** Whether the preview pane sits beside the editor. */
+  showPreview: boolean
   /** Editor pane width as a percentage of the split (0–100). */
   splitLeftPercent: number
-  /** Whether the Characters & Locations panel is collapsed. */
-  insightsCollapsed: boolean
   /** Which groups the Characters & Locations panel displays. */
   insightsGroups: InsightsGroups
   /** Whether section ranges are rendered over the preview pages. */
   showSections: boolean
 }
 
-/** Per-group visibility for the Characters & Locations panel. */
+/**
+ * Per-group visibility for the Cast panel. Sections used to be a third group
+ * here; they're the Outline tab's job now, so the record has two members.
+ */
 export interface InsightsGroups {
-  sections: boolean
   characters: boolean
   locations: boolean
 }
 
 const DEFAULT_GROUPS: InsightsGroups = {
-  sections: true,
   characters: true,
   locations: true,
 }
 
 const DEFAULTS: LayoutPrefs = {
   navCollapsed: false,
-  rightTab: 'preview',
+  sidebarTab: 'files',
+  showPreview: true,
   splitLeftPercent: 50,
-  insightsCollapsed: true,
   insightsGroups: { ...DEFAULT_GROUPS },
   showSections: false,
 }
 
 /**
- * The pre-tab shape, where Preview was a boolean and Notes was an overlay
- * drawer that could sit *on top of* it. Read once so an existing install keeps
- * whatever it had open rather than snapping back to the default.
+ * Older shapes of this record, read once so an existing install lands somewhere
+ * sensible instead of snapping back to the defaults:
+ *
+ *   v1  `showPreview` / `showNotes` booleans — Notes was an overlay drawer that
+ *       drew *over* the preview.
+ *   v2  `rightTab: 'preview' | 'notes' | null` — the two became peers sharing
+ *       the right pane.
+ *
+ * Notes has since moved to the sidebar, so a stored "notes" is now two
+ * settings: open the sidebar on its tab, and leave the preview alone.
  */
 interface LegacyPrefs {
   showPreview?: unknown
   showNotes?: unknown
+  rightTab?: unknown
 }
 
-// Notes drew over the preview, so with both flags set Notes is what was
-// actually on screen — that's the tab to restore.
-function migrateRightTab(legacy: LegacyPrefs): RightTab | null {
-  if (legacy.showNotes === true) return 'notes'
-  if (legacy.showPreview === true) return 'preview'
-  if (legacy.showPreview === false) return null
-  return DEFAULTS.rightTab
+function migrateSidebarTab(legacy: LegacyPrefs): SidebarTab {
+  if (legacy.rightTab === 'notes' || legacy.showNotes === true) return 'notes'
+  return DEFAULTS.sidebarTab
+}
+
+function migratePreview(legacy: LegacyPrefs): boolean {
+  if (legacy.rightTab === 'preview') return true
+  if (legacy.rightTab === null) return false
+  // v1: Notes drew over the preview, so showPreview still says what the right
+  // pane held underneath it.
+  if (typeof legacy.showPreview === 'boolean') return legacy.showPreview
+  return DEFAULTS.showPreview
 }
 
 export function loadLayout(): LayoutPrefs {
@@ -82,25 +97,22 @@ export function loadLayout(): LayoutPrefs {
           typeof parsed.navCollapsed === 'boolean'
             ? parsed.navCollapsed
             : DEFAULTS.navCollapsed,
-        rightTab:
-          parsed.rightTab === 'preview' ||
-          parsed.rightTab === 'notes' ||
-          parsed.rightTab === null
-            ? parsed.rightTab
-            : migrateRightTab(parsed),
+        sidebarTab:
+          parsed.sidebarTab === 'files' ||
+          parsed.sidebarTab === 'outline' ||
+          parsed.sidebarTab === 'notes' ||
+          parsed.sidebarTab === 'cast'
+            ? parsed.sidebarTab
+            : migrateSidebarTab(parsed),
+        showPreview:
+          typeof parsed.showPreview === 'boolean' && parsed.rightTab === undefined
+            ? parsed.showPreview
+            : migratePreview(parsed),
         splitLeftPercent:
           typeof parsed.splitLeftPercent === 'number'
             ? Math.min(80, Math.max(20, parsed.splitLeftPercent))
             : DEFAULTS.splitLeftPercent,
-        insightsCollapsed:
-          typeof parsed.insightsCollapsed === 'boolean'
-            ? parsed.insightsCollapsed
-            : DEFAULTS.insightsCollapsed,
         insightsGroups: {
-          sections:
-            typeof parsed.insightsGroups?.sections === 'boolean'
-              ? parsed.insightsGroups.sections
-              : DEFAULT_GROUPS.sections,
           characters:
             typeof parsed.insightsGroups?.characters === 'boolean'
               ? parsed.insightsGroups.characters

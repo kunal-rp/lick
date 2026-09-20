@@ -8,6 +8,8 @@ export type { CapSuggestion, CapKind } from './capitalization'
 export { renderEmphasis } from './emphasis'
 export { analyzeScript, buildInsights } from './insights'
 export { parseSections } from './sections'
+export { buildOutline } from './outline'
+export type { OutlineEntry } from './outline'
 export type { Section } from './sections'
 export type {
   Screenplay,
