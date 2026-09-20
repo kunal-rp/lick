@@ -330,6 +330,20 @@ export function VersionBar({
               >
                 New version
               </button>
+              {/* History is hidden from the bar at this width (it carries
+                  --inline-action), so without an entry here it would be
+                  unreachable on a phone entirely. */}
+              <button
+                type="button"
+                className="verbar__popup-item"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onOpenHistory()
+                }}
+              >
+                History
+              </button>
               {mobileView === 'preview' && (
                 <>
                   <div className="verbar__popup-divider" aria-hidden="true" />
