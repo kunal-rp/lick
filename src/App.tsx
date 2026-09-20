@@ -185,8 +185,8 @@ export default function App() {
   // dialog, where any snapshot can be restored.
   const [history, setHistory] = useState<HistorySnapshot[]>([])
   const [showHistory, setShowHistory] = useState(false)
-  // Command palette visibility. Like `zoomed`, deliberately not persisted — it
-  // is a momentary door, not a layout.
+  // Command palette visibility. Deliberately not persisted — it is a momentary
+  // door, not a layout.
   const [showCommands, setShowCommands] = useState(false)
   // Live mirror of `history` for the async snapshot recorder/writer, plus the
   // project it belongs to and the Drive file id (created lazily on first write).
@@ -343,8 +343,7 @@ export default function App() {
     document.title = projectName ? `${projectName} — kunal's scripts` : "kunal's scripts"
   }, [projectName])
 
-  // Persist which panels are open as they change. (`zoomed` is intentionally
-  // absent — see its declaration.)
+  // Persist the layout as it changes.
   useEffect(() => {
     layoutRef.current.navCollapsed = navCollapsed
     layoutRef.current.sidebarTab = sidebarTab

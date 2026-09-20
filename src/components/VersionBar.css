@@ -161,72 +161,6 @@
 
 .verbar__spacer {
   flex: 1 1 auto;
-}/*
- * Desktop view controls: which panel occupies the right pane, plus expand.
- * Grouped into one segmented cluster so they read as a single choice about the
- * workspace, distinct from the document actions (Save / Export / New version)
- * further right. Mobile hides this in favour of the view-cycle control.
- */
-
-.verbar__views {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--raised);
-}
-
-.verbar__view-btn {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-family: inherit;
-  line-height: 1.5;
-  cursor: pointer;
-  transition: background 0.1s ease, color 0.1s ease;
-}
-
-.verbar__view-btn:hover:not(:disabled) {
-  background: var(--hover);
-  color: var(--text);
-}
-
-.verbar__view-btn--active {
-  background: var(--panel-bg);
-  color: var(--text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-}
-
-.verbar__view-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}/* The expand toggle is a glyph-only affordance; separate it from the two named
-   tabs so it doesn't read as a third destination. */
-
-.verbar__view-btn--zoom {
-  margin-left: 2px;
-  padding: 3px 7px;
-  border-left: 1px solid var(--border);
-  border-radius: 0 4px 4px 0;
-  font-size: 13px;
-}/* Segmented view control (mobile only) — on desktop the view controls above
-   do this job. */
-
-.verbar__viewswitch {
-  display: none;
-  flex: 1 1 auto;
-  min-width: 0;
-  justify-content: flex-end;
 }
 
 /*
@@ -269,15 +203,7 @@
     padding: 4px 6px;
   }
 
-  /* Superseded by the segmented control at the bar's right edge. */
-  .verbar__views {
-    display: none;
-  }
-
-  .verbar__viewswitch {
-    display: flex;
-  }
-
+  
   /* ⌘K has no keyboard to be pressed from; the icon alone opens the palette,
      which is still worth having as a searchable index of every command. */
   .verbar__commands-key {
@@ -295,7 +221,3 @@
   height: 17px;
 }
 
-.verbar__view-btn svg {
-  width: 14px;
-  height: 14px;
-}

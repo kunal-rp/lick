@@ -8,12 +8,6 @@
   border-top: 1px solid var(--border);
 }
 
-/* When it's the only panel in the right stack, take all the room. */
-.insights--grow {
-  flex: 1 1 auto;
-  max-height: none;
-}
-
 .insights--collapsed {
   flex: 0 0 auto;
   max-height: none;
