@@ -5,7 +5,6 @@ import {
   ChevronLeftIcon,
   FolderIcon,
   MoonIcon,
-  NoteIcon,
   OutlineIcon,
   SunIcon,
   UsersIcon,
@@ -26,24 +25,24 @@ interface SidebarProps {
 const TABS: { key: SidebarTab; label: string; icon: JSX.Element }[] = [
   { key: 'files', label: 'Files', icon: <FolderIcon /> },
   { key: 'outline', label: 'Outline', icon: <OutlineIcon /> },
-  { key: 'notes', label: 'Notes', icon: <NoteIcon /> },
   { key: 'cast', label: 'Cast', icon: <UsersIcon /> },
 ]
 
 /**
- * The single left-hand reference surface: files, outline, notes and cast as
- * tabs of one panel.
+ * The left-hand navigation surface: files, outline and cast as tabs of one
+ * panel — the three ways of getting somewhere in a script.
  *
- * These used to be three unrelated places. The file tree owned the left edge;
- * Notes competed with the preview for the right pane, so opening your notes
- * destroyed your pages; and Characters & Locations — the only jump-to-line
- * surface in the app — was a collapsed strip *underneath* the preview, which
- * meant the app's outline only existed while the preview did.
+ * These used to be two unrelated places. The file tree owned the left edge,
+ * and Characters & Locations — the only jump-to-line surface in the app — was
+ * a collapsed strip *underneath* the preview, which meant the outline only
+ * existed while the preview did. Highland 2's sidebar is the model (Navigator,
+ * Bin and the rest as tabs of one rail), as is Beat's outline sidebar and
+ * Slugline's Outline Navigator.
  *
- * Highland 2's sidebar is the model here (Navigator, Bin and the rest as tabs
- * of one rail), as is Beat's outline sidebar and Slugline's Outline Navigator.
- * One rail, one place to look, and the right half of the window handed back to
- * the script.
+ * Notes is not a tab here. It's somewhere you read from and write to *while*
+ * drafting — you want it open next to the scene you're working on, not in a
+ * rail you switch away from the outline to reach — so it sits beside the
+ * editor instead. See `Companion` in layout.ts.
  */
 export function Sidebar({
   tab,

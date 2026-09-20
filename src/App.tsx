@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Editor } from './components/Editor'
 import { Preview } from './components/Preview'
+import { SplitPane } from './components/SplitPane'
 import { InsightsPanel } from './components/InsightsPanel'
 import { FileNav } from './components/FileNav'
 import { Sidebar } from './components/Sidebar'
@@ -67,7 +75,7 @@ import {
 import { useDriveAuth } from './drive/useDriveAuth'
 import { useWorkingFolder } from './drive/useWorkingFolder'
 import { loadLastOpened, saveLastOpened } from './lastOpened'
-import { loadLayout, saveLayout, type SidebarTab } from './layout'
+import { loadLayout, saveLayout, type Companion, type SidebarTab } from './layout'
 import { beginThemeFade, loadTheme, saveTheme, type Theme } from './theme'
 import { MenuIcon } from './components/icons'
 import { useIsMobile } from './useIsMobile'
@@ -149,13 +157,17 @@ export default function App() {
   // Light/dark theme, applied to <html> as data-theme and persisted.
   const [theme, setTheme] = useState<Theme>(loadTheme)
 
-  // The workspace is a sidebar plus one view. `sidebarTab` says which
-  // reference panel the sidebar shows; `showPreview` says whether that view is
-  // the pages rather than the editor. Two values, the same at every width.
+  // The workspace is a sidebar, the editor, and whatever sits beside it.
+  // `sidebarTab` says which navigation panel the sidebar shows; `companion`
+  // says what shares the main area with the editor — the pages, the notes, or
+  // nothing. Two values, the same at every width: on a phone the companion
+  // simply fills the screen instead of splitting it.
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(
     layoutRef.current.sidebarTab,
   )
-  const [showPreview, setShowPreview] = useState(layoutRef.current.showPreview)
+  const [companion, setCompanion] = useState<Companion>(
+    layoutRef.current.companion,
+  )
 
   // Whether section ranges are rendered over the preview pages (toolbar toggle).
   const [showSections, setShowSections] = useState(layoutRef.current.showSections)
@@ -347,10 +359,10 @@ export default function App() {
   useEffect(() => {
     layoutRef.current.navCollapsed = navCollapsed
     layoutRef.current.sidebarTab = sidebarTab
-    layoutRef.current.showPreview = showPreview
+    layoutRef.current.companion = companion
     layoutRef.current.showSections = showSections
     saveLayout(layoutRef.current)
-  }, [navCollapsed, sidebarTab, showPreview, showSections])
+  }, [navCollapsed, sidebarTab, companion, showSections])
 
   // Entering mobile width, collapse the sidebar to its rail so the editor fills
   // the screen; the drawer is a tap away. Nothing to undo going the other way —
@@ -705,17 +717,19 @@ export default function App() {
     return URL.createObjectURL(blob)
   }, [])
 
-  // Step into the pages, or back out to the script. One control, one value,
-  // identical on a phone and a monitor — the view switcher in the top bar and
-  // the palette's View commands all come through here.
-  const setView = (view: 'editor' | 'preview') => {
+  // Choose what sits beside the editor. The switch in the top bar and the
+  // palette's View commands both come through here.
+  const chooseCompanion = (next: Companion) => {
     setShowHistory(false)
-    setShowPreview(view === 'preview')
+    setCompanion(next)
   }
-  const togglePreview = () => setView(showPreview ? 'editor' : 'preview')
+  // ⇧⌘P swaps the pages in and out without disturbing a notes session: from
+  // notes it brings the preview up, from the preview it goes full width.
+  const togglePreview = () =>
+    chooseCompanion(companion === 'preview' ? 'none' : 'preview')
 
-  // Open the sidebar on a given tab — what the palette's "Show notes" and
-  // "Show outline" commands do, and what the collapsed rail's buttons do.
+  // Open the sidebar on a given tab — what the palette's "Show outline"
+  // command does, and what the collapsed rail's buttons do.
   const openSidebar = (tab: SidebarTab) => {
     setSidebarTab(tab)
     setNavCollapsed(false)
@@ -1099,26 +1113,32 @@ export default function App() {
     },
     {
       id: 'view-editor',
-      label: 'Show editor only',
+      label: 'Editor only',
       group: 'View',
-      keywords: 'write full screen distraction free',
-      hint: SHIFT_MOD + 'P',
-      run: () => setView('editor'),
+      keywords: 'write full screen distraction free wide hide close',
+      run: () => chooseCompanion('none'),
     },
     {
       id: 'view-preview',
-      label: 'Show preview',
+      label: 'Preview beside the editor',
       group: 'View',
-      keywords: 'pages render script pagination print',
+      keywords: 'pages render script pagination print split',
       hint: SHIFT_MOD + 'P',
-      run: () => setView('preview'),
+      run: () => chooseCompanion('preview'),
+    },
+    {
+      id: 'view-notes',
+      label: 'Notes beside the editor',
+      group: 'View',
+      keywords: 'notebook scratch research split reference',
+      run: () => chooseCompanion('notes'),
     },
     {
       id: 'fit-preview',
       label: 'Fit preview page to the pane',
       group: 'View',
       keywords: 'zoom scale width',
-      disabled: !showPreview,
+      disabled: companion !== 'preview',
       run: () => setFitNonce((n) => n + 1),
     },
     {
@@ -1134,13 +1154,6 @@ export default function App() {
       group: 'Sidebar',
       keywords: 'scenes sections structure navigator acts',
       run: () => openSidebar('outline'),
-    },
-    {
-      id: 'side-notes',
-      label: 'Show notes',
-      group: 'Sidebar',
-      keywords: 'notebook scratch research',
-      run: () => openSidebar('notes'),
     },
     {
       id: 'side-cast',
@@ -1245,18 +1258,6 @@ export default function App() {
               if (isMobile) setNavCollapsed(true)
             }}
           />
-        ) : sidebarTab === 'notes' ? (
-          <NotesPanel
-            notes={notes}
-            onCreate={addNote}
-            onChangeNote={updateNote}
-            onDeleteNote={deleteNote}
-            onUploadMedia={uploadNoteMedia}
-            onDeleteMedia={deleteNoteMedia}
-            loadMedia={loadNoteMedia}
-            onClose={() => setNavCollapsed(true)}
-            busy={busy}
-          />
         ) : (
           <InsightsPanel
             source={source}
@@ -1327,8 +1328,8 @@ export default function App() {
               }
               onSave={() => void persist()}
               onToggleNav={() => setNavCollapsed(false)}
-              view={showPreview ? 'preview' : 'editor'}
-              onSetView={setView}
+              companion={companion}
+              onSetCompanion={chooseCompanion}
               onOpenCommands={() => setShowCommands(true)}
             />
             <div className="workspace__editor">
@@ -1362,6 +1363,19 @@ export default function App() {
                     onRevealInPreview={revealInPreview}
                   />
                 )
+                const notesNode = (
+                  <NotesPanel
+                    notes={notes}
+                    onCreate={addNote}
+                    onChangeNote={updateNote}
+                    onDeleteNote={deleteNote}
+                    onUploadMedia={uploadNoteMedia}
+                    onDeleteMedia={deleteNoteMedia}
+                    loadMedia={loadNoteMedia}
+                    onClose={() => chooseCompanion('none')}
+                    busy={busy}
+                  />
+                )
                 const previewNode = (
                   <Preview
                     source={source}
@@ -1381,47 +1395,73 @@ export default function App() {
                     onDeleteComment={deleteComment}
                   />
                 )
-                // One view fills the workspace: the editor, or the pages.
+                // The editor, and whatever shares the main area with it.
                 //
-                // The split is gone. It existed to show a rendered copy beside
-                // raw markup, and the editor renders itself now — so the second
-                // half was spending a monitor's worth of width on the same
-                // words twice. Preview is a mode you step into to check
-                // pagination and step back out of, which is what Highland,
-                // Slugline and Beat all do. Phones and desktops finally
-                // describe their layout with the same single value.
+                // Seeing an edit land in the rendered page as you make it is
+                // the reason the preview exists, so it sits beside the script
+                // rather than replacing it. Notes goes in the same slot: it's
+                // something you read from and write to *while* drafting, which
+                // makes it a companion to the scene you're on, not a place you
+                // navigate to.
                 //
-                // The editor stays mounted underneath rather than being
-                // swapped out, so stepping into the preview and back keeps the
-                // undo stack, the caret and the scroll position — unmounting it
-                // threw all three away.
-                //
-                // Both stay mounted, with the inactive one hidden but still
-                // laid out (see .workspace__view--hidden). That is not an
-                // optimisation — it's required in both directions. The editor
-                // keeps its undo stack, caret and scroll position across a
-                // trip to the pages; and the *preview* is what paginates the
-                // script, so the page-break guides drawn in the editor go
-                // stale the moment it stops rendering. `display: none` would
-                // break it either way, since a box with no layout measures as
-                // zero.
-                return (
+                // The preview stays mounted whichever companion is showing.
+                // That isn't an optimisation — it's what paginates the script,
+                // and the page-break guides drawn in the *editor* freeze at
+                // the last render the moment it stops. When it isn't the
+                // visible companion it goes off-stage: still laid out at a
+                // real size, just positioned out of view. `display: none`
+                // would report zero for every rect and break the guides.
+                const paneFor = (which: Companion, node: ReactNode) => (
+                  <div
+                    className={`companion${
+                      companion === which ? '' : ' companion--offstage'
+                    }`}
+                    aria-hidden={companion === which ? undefined : true}
+                  >
+                    {node}
+                  </div>
+                )
+
+                // Notes is mounted only when chosen. Unlike the preview it
+                // computes nothing the rest of the app depends on, and it
+                // holds Lexical editors and decoded media of its own that
+                // aren't worth keeping warm off-stage.
+                const companionNode = (
                   <>
-                    <div
-                      className={`workspace__view${
-                        showPreview ? ' workspace__view--hidden' : ''
-                      }`}
-                    >
-                      {editorNode}
-                    </div>
-                    <div
-                      className={`workspace__view${
-                        showPreview ? '' : ' workspace__view--hidden'
-                      }`}
-                    >
-                      {previewNode}
-                    </div>
+                    {paneFor('preview', previewNode)}
+                    {companion === 'notes' && paneFor('notes', notesNode)}
                   </>
+                )
+
+                // Phones have no room for two panes, so the companion takes
+                // the screen instead of half of it. Same value either way —
+                // it's what keeps the two densities from disagreeing.
+                if (isMobile) {
+                  return (
+                    <>
+                      <div
+                        className={`companion${
+                          companion === 'none' ? '' : ' companion--offstage'
+                        }`}
+                      >
+                        {editorNode}
+                      </div>
+                      {companionNode}
+                    </>
+                  )
+                }
+
+                return (
+                  <SplitPane
+                    left={editorNode}
+                    right={companionNode}
+                    collapsed={companion === 'none'}
+                    initialLeftPercent={layoutRef.current.splitLeftPercent}
+                    onResize={(pct) => {
+                      layoutRef.current.splitLeftPercent = pct
+                      saveLayout(layoutRef.current)
+                    }}
+                  />
                 )
               })()}
               {showHistory && (

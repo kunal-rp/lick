@@ -41,27 +41,27 @@
 }
 
 /*
- * The view filling the workspace — the editor, or the pages. Exactly one is
- * visible; the other is hidden but still laid out.
+ * A pane in the main area — the editor, or whatever shares the area with it.
  *
- * Laid out, not `display: none`, because both sides measure themselves: the
- * editor's page-break guides and section bands are positioned from client
- * rects, and the *preview* is what computes the pagination those guides show.
- * A box with no layout measures as zero, which would silently empty the guides
- * the moment you started writing.
- *
- * `visibility: hidden` also takes the hidden view out of hit testing and the
- * tab order, so a hidden contenteditable can't steal focus or a stray click.
+ * The one that isn't showing goes off-stage rather than away: positioned out
+ * of view but still laid out at a real size. The preview is what paginates the
+ * script, and the page-break guides drawn in the *editor* are positioned from
+ * its client rects, so a preview with no layout reports zero for everything
+ * and freezes the guides. `visibility: hidden` would lay out correctly but
+ * still reserve the space, which is the width we're handing back.
  */
-.workspace__view {
+.companion {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
 }
 
-.workspace__view--hidden {
+.companion--offstage {
   position: absolute;
-  inset: 0;
-  visibility: hidden;
+  top: 0;
+  left: -20000px;
+  width: 900px;
+  height: 100%;
   pointer-events: none;
 }
 

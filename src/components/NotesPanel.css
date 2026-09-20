@@ -532,10 +532,16 @@
 
 /* Mobile: the notes UI takes over the whole editor area (no side drawer). */
 @media (max-width: 768px) {
-  /* The list view's top bar only carried a Close button; on mobile the top-bar
-     view-cycle control leaves notes, so drop it. (The note view keeps its bar
-     for back-to-list and delete.) */
+  /* The list view's top bar only carries a Close button, and at this width the
+     view switch in the top bar is what leaves notes. (The note view keeps its
+     bar for back-to-list and delete.) */
   .notes__nav--list {
     display: none;
   }
+}
+
+/* Beside the editor, notes needs its own left edge — in the sidebar the panel
+   frame supplied one. */
+.companion > .notes {
+  border-left: 1px solid var(--border);
 }

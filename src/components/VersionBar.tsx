@@ -1,14 +1,10 @@
 import type { Version } from '../drive/versions'
 import { ViewSwitch, type ViewOption } from './ViewSwitch'
-import { CommandIcon, MenuIcon, PagesIcon, PenIcon } from './icons'
+import type { Companion } from '../layout'
+import { CommandIcon, MenuIcon, NoteIcon, PagesIcon, PenIcon } from './icons'
 import './VersionBar.css'
 
-/**
- * What the workspace is showing. Notes is absent on purpose: it moved into the
- * sidebar with the files, outline and cast, leaving this control to answer the
- * one question it should — am I writing, or reading pages?
- */
-export type View = 'editor' | 'preview'
+
 
 interface VersionBarProps {
   projectName: string
@@ -22,18 +18,29 @@ interface VersionBarProps {
   onSave: () => void
   /** Open the project drawer (mobile only; the button is hidden on desktop). */
   onToggleNav: () => void
-  /** What the workspace is showing. */
-  view: View
-  onSetView: (view: View) => void
+  /**
+   * What sits beside the editor. On a phone there's no room for two panes, so
+   * the same value picks which single pane fills the screen — one control and
+   * one value describing both densities, which is what keeps them from
+   * drifting apart.
+   */
+  companion: Companion
+  onSetCompanion: (companion: Companion) => void
   /** Open the command palette — everything not in this bar lives there. */
   onOpenCommands: () => void
 }
 
 // In reading order. Order matters: it's the order the segments appear in, and
 // the order the arrow keys walk.
-const VIEWS: ViewOption<View>[] = [
-  { key: 'editor', icon: <PenIcon />, label: 'Editor' },
+//
+// "Editor" is the full-width option — it reads as a destination on a phone and
+// as "nothing beside the script" on a desktop, and it's listed as its own
+// segment on purpose. The pane toggles this replaced hid that state behind
+// clicking whichever tab was already active.
+const COMPANIONS: ViewOption<Companion>[] = [
+  { key: 'none', icon: <PenIcon />, label: 'Editor' },
   { key: 'preview', icon: <PagesIcon />, label: 'Preview' },
+  { key: 'notes', icon: <NoteIcon />, label: 'Notes' },
 ]
 
 /**
@@ -47,7 +54,7 @@ const VIEWS: ViewOption<View>[] = [
  *
  *   identity  — which script and draft you're in
  *   status    — whether your words are safe
- *   view      — the script, or the pages
+ *   companion — what sits beside the script, if anything
  *
  * plus the door to everything else. The save control stays because it answers a
  * question a writer asks constantly and can't afford to go looking for.
@@ -62,8 +69,8 @@ export function VersionBar({
   onSelectVersion,
   onSave,
   onToggleNav,
-  view,
-  onSetView,
+  companion,
+  onSetCompanion,
   onOpenCommands,
 }: VersionBarProps) {
   const savedTime =
@@ -138,16 +145,16 @@ export function VersionBar({
       <div className="verbar__spacer" />
 
       {/*
-        One control at every width. The editor formats in place now, so there
-        is no split to size and nothing to expand over anything else — the pair
-        of pane toggles plus a zoom button that this bar used to carry were
-        three controls describing four states, and they collapse to this.
+        One control at every width, over one value. This bar used to carry two
+        pane toggles plus a zoom button — three controls describing four
+        states, where collapsing the pane meant clicking the tab that was
+        already selected.
       */}
       <ViewSwitch
-        value={view}
-        options={VIEWS}
-        onChange={onSetView}
-        label="View"
+        value={companion}
+        options={COMPANIONS}
+        onChange={onSetCompanion}
+        label="Beside the editor"
       />
 
       <button

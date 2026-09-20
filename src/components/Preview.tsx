@@ -351,9 +351,15 @@ export function Preview({
 
   // Preview magnification, as a percentage (100 = actual size).
   const [zoom, setZoom] = useState(100)
-  // Auto-fit (desktop): when on, keep the page fitted to the pane and re-fit on
-  // every pane resize. Any manual zoom turns it off.
-  const [autoFit, setAutoFit] = useState(false)
+  // Auto-fit (desktop): keep the page fitted to the pane and re-fit on every
+  // pane resize. Any manual zoom turns it off.
+  //
+  // On by default. The preview's whole job is showing how an edit lands on the
+  // page as you make it, and it opens beside the editor — so at 100% in half a
+  // window it would open cropped, and every writer's first action would be to
+  // click Fit. Starting fitted and letting a wheel or a pinch take over is the
+  // right way round.
+  const [autoFit, setAutoFit] = useState(true)
   // Mirror of `zoom` for use inside native event listeners without re-binding.
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom

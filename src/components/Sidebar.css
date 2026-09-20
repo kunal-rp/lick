@@ -128,12 +128,6 @@
   border-top: 1px solid var(--border);
 }
 
-/* The Notes tab brings its own full-height column and scroller, so the body
-   must not add a second one around it. */
-.sidebar__body > .notes {
-  height: 100%;
-}
-
 .sidebar__backdrop {
   display: none;
 }
