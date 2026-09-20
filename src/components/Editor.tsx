@@ -10,7 +10,7 @@ import {
   $createTextNode,
   $getRoot,
 } from 'lexical'
-import { Toolbar, type ViewToggle } from './lexical/Toolbar'
+import { Toolbar } from './lexical/Toolbar'
 import { OnChangeFountainPlugin } from './lexical/plugins/OnChangeFountainPlugin'
 import { EmphasisShortcutsPlugin } from './lexical/plugins/EmphasisShortcutsPlugin'
 import { PageBreakGuidesPlugin } from './lexical/plugins/PageBreakGuidesPlugin'
@@ -31,8 +31,6 @@ interface EditorProps {
   pageBreakLines: number[]
   /** Section ranges to paint as tinted background bands behind the text. */
   sections?: Section[]
-  /** View panels the toolbar can show/hide (e.g. Preview). */
-  viewToggles?: ViewToggle[]
   /** Request to move the caret to a source line and scroll it into view. */
   jumpTo?: { line: number; nonce: number } | null
   /** Scroll offset (px) to restore on mount (remembered per version). */
@@ -70,7 +68,6 @@ export function Editor({
   onChange,
   pageBreakLines,
   sections = [],
-  viewToggles,
   jumpTo,
   initialScrollTop,
   onScrollChange,
@@ -110,7 +107,7 @@ export function Editor({
   return (
     <div className="editor">
       <LexicalComposer initialConfig={initialConfig}>
-        <Toolbar viewToggles={viewToggles} />
+        <Toolbar />
         <div className="editor__surface" ref={surfaceRef} onScroll={handleScroll}>
           <SectionBackgroundsPlugin sections={sections} />
           <PageBreakGuidesPlugin breakLines={pageBreakLines} />

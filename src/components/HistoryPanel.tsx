@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { HistorySnapshot } from '../history'
 import { collapseUnchanged, diffLines, diffSummary } from '../diff'
 import './HistoryPanel.css'
@@ -34,9 +34,9 @@ function relativeTime(then: number, now: number): string {
 }
 
 /**
- * A right-side drawer listing the recent edit snapshots of the open version.
- * Each entry shows when it was taken and how it differs from the current text;
- * expanding one reveals the line diff, and Restore loads it back into the editor.
+ * A dialog listing the recent edit snapshots of the open version. Each entry
+ * shows when it was taken and how it differs from the current text; expanding
+ * one reveals the line diff, and Restore loads it back into the editor.
  */
 export function HistoryPanel({
   snapshots,
@@ -52,116 +52,143 @@ export function HistoryPanel({
   // Newest first for display.
   const ordered = useMemo(() => [...snapshots].reverse(), [snapshots])
 
+  // Escape dismisses, as it should for anything modal. Capture phase so the
+  // editor's own key handling doesn't swallow it first.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
+
   return (
-    <aside className="history" role="dialog" aria-label="Edit history">
-      <div className="history__head">
-        <span className="history__title">Edit history</span>
-        <button
-          type="button"
-          className="history__close"
-          onClick={onClose}
-          aria-label="Close history"
-          title="Close"
-        >
-          ×
-        </button>
-      </div>
+    <div
+      className="history__backdrop"
+      // Only a click that starts *and* ends on the backdrop dismisses, so
+      // releasing a drag that began inside the dialog doesn't close it.
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <aside
+        className="history"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit history"
+      >
+          <div className="history__head">
+          <span className="history__title">Edit history</span>
+          <button
+            type="button"
+            className="history__close"
+            onClick={onClose}
+            aria-label="Close history"
+            title="Close"
+          >
+            ×
+          </button>
+        </div>
 
-      {ordered.length === 0 ? (
-        <p className="history__empty">
-          No history yet. As you edit, snapshots are captured here so you can
-          look back and restore any point.
-        </p>
-      ) : (
-        <ul className="history__list">
-          {ordered.map((snap) => {
-            const isCurrent = snap.text === currentText
-            const { added, removed } = diffSummary(snap.text, currentText)
-            const expanded = expandedId === snap.id
-            return (
-              <li key={snap.id} className="history__item">
-                <button
-                  type="button"
-                  className="history__row"
-                  aria-expanded={expanded}
-                  onClick={() =>
-                    setExpandedId((id) => (id === snap.id ? null : snap.id))
-                  }
-                >
-                  <span className="history__chevron">{expanded ? '▾' : '▸'}</span>
-                  <span className={`history__badge history__badge--${snap.kind}`}>
-                    {KIND_LABEL[snap.kind]}
-                  </span>
-                  <span className="history__when">
-                    {relativeTime(snap.createdAt, now)}
-                  </span>
-                  <span className="history__delta">
-                    {isCurrent ? (
-                      <span className="history__current">current</span>
-                    ) : (
-                      <>
-                        {added > 0 && (
-                          <span className="history__add">+{added}</span>
-                        )}
-                        {removed > 0 && (
-                          <span className="history__del">−{removed}</span>
-                        )}
-                      </>
-                    )}
-                  </span>
-                </button>
+        {ordered.length === 0 ? (
+          <p className="history__empty">
+            No history yet. As you edit, snapshots are captured here so you can
+            look back and restore any point.
+          </p>
+        ) : (
+          <ul className="history__list">
+            {ordered.map((snap) => {
+              const isCurrent = snap.text === currentText
+              const { added, removed } = diffSummary(snap.text, currentText)
+              const expanded = expandedId === snap.id
+              return (
+                <li key={snap.id} className="history__item">
+                  <button
+                    type="button"
+                    className="history__row"
+                    aria-expanded={expanded}
+                    onClick={() =>
+                      setExpandedId((id) => (id === snap.id ? null : snap.id))
+                    }
+                  >
+                    <span className="history__chevron">{expanded ? '▾' : '▸'}</span>
+                    <span className={`history__badge history__badge--${snap.kind}`}>
+                      {KIND_LABEL[snap.kind]}
+                    </span>
+                    <span className="history__when">
+                      {relativeTime(snap.createdAt, now)}
+                    </span>
+                    <span className="history__delta">
+                      {isCurrent ? (
+                        <span className="history__current">current</span>
+                      ) : (
+                        <>
+                          {added > 0 && (
+                            <span className="history__add">+{added}</span>
+                          )}
+                          {removed > 0 && (
+                            <span className="history__del">−{removed}</span>
+                          )}
+                        </>
+                      )}
+                    </span>
+                  </button>
 
-                {expanded && (
-                  <div className="history__detail">
-                    {isCurrent ? (
-                      <p className="history__nochange">
-                        This is the current text.
-                      </p>
-                    ) : (
-                      <pre className="history__diff">
-                        {collapseUnchanged(
-                          diffLines(snap.text, currentText),
-                        ).map((l, i) =>
-                          l.op === 'gap' ? (
-                            <div key={i} className="history__diff-gap">
-                              ⋯ {l.count} unchanged line{l.count === 1 ? '' : 's'}
-                            </div>
-                          ) : (
-                            <div
-                              key={i}
-                              className={`history__diff-line history__diff-line--${l.op}`}
-                            >
-                              <span className="history__diff-gutter">
-                                {l.op === 'add' ? '+' : l.op === 'del' ? '−' : ' '}
-                              </span>
-                              {l.text || ' '}
-                            </div>
-                          ),
-                        )}
-                      </pre>
-                    )}
-                    <div className="history__actions">
-                      <button
-                        type="button"
-                        className="history__btn history__btn--primary"
-                        disabled={isCurrent || busy}
-                        onClick={() => onRestore(snap)}
-                        title={
-                          isCurrent
-                            ? 'Already the current text'
-                            : 'Load this text back into the editor'
-                        }
-                      >
-                        Restore this version
-                      </button>
+                  {expanded && (
+                    <div className="history__detail">
+                      {isCurrent ? (
+                        <p className="history__nochange">
+                          This is the current text.
+                        </p>
+                      ) : (
+                        <pre className="history__diff">
+                          {collapseUnchanged(
+                            diffLines(snap.text, currentText),
+                          ).map((l, i) =>
+                            l.op === 'gap' ? (
+                              <div key={i} className="history__diff-gap">
+                                ⋯ {l.count} unchanged line{l.count === 1 ? '' : 's'}
+                              </div>
+                            ) : (
+                              <div
+                                key={i}
+                                className={`history__diff-line history__diff-line--${l.op}`}
+                              >
+                                <span className="history__diff-gutter">
+                                  {l.op === 'add' ? '+' : l.op === 'del' ? '−' : ' '}
+                                </span>
+                                {l.text || ' '}
+                              </div>
+                            ),
+                          )}
+                        </pre>
+                      )}
+                      <div className="history__actions">
+                        <button
+                          type="button"
+                          className="history__btn history__btn--primary"
+                          disabled={isCurrent || busy}
+                          onClick={() => onRestore(snap)}
+                          title={
+                            isCurrent
+                              ? 'Already the current text'
+                              : 'Load this text back into the editor'
+                          }
+                        >
+                          Restore this version
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </aside>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </aside>
+    </div>
   )
 }

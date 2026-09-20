@@ -1,16 +1,48 @@
-/* Right-side drawer over the editor area, listing recent edit snapshots. */
-.history {
+/*
+ * Edit history, as a centered dialog over the workspace.
+ *
+ * It used to be a right-edge drawer, which put it in direct competition with
+ * the notes drawer for the same strip of screen — the two had to force each
+ * other closed for no reason a reader could see. It's a look-and-restore
+ * errand, not a place you work, so it's modal: it borrows the whole area,
+ * gets width enough for a readable diff, and hands it straight back.
+ */
+.history__backdrop {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  width: min(380px, 92vw);
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.history {
+  position: relative;
+  z-index: 1;
+  width: min(720px, 100%);
+  max-height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--panel-bg);
-  border-left: 1px solid var(--border);
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 768px) {
+  .history__backdrop {
+    padding: 0;
+  }
+
+  .history {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+  }
 }
 
 .history__head {

@@ -65,7 +65,7 @@ import {
 import { useDriveAuth } from './drive/useDriveAuth'
 import { useWorkingFolder } from './drive/useWorkingFolder'
 import { loadLastOpened, saveLastOpened } from './lastOpened'
-import { loadLayout, saveLayout } from './layout'
+import { loadLayout, saveLayout, type RightTab } from './layout'
 import { loadTheme, saveTheme, type Theme } from './theme'
 import { useIsMobile } from './useIsMobile'
 import { useAppViewportHeight } from './useAppViewportHeight'
@@ -136,9 +136,20 @@ export default function App() {
   const [navCollapsed, setNavCollapsed] = useState(layoutRef.current.navCollapsed)
   // Light/dark theme, applied to <html> as data-theme and persisted.
   const [theme, setTheme] = useState<Theme>(loadTheme)
-  // Whether the preview is shown (toggled from the editor toolbar). The
-  // Characters & Locations panel accompanies it (collapsible).
-  const [showPreview, setShowPreview] = useState(layoutRef.current.showPreview)
+
+  // The workspace is one editor plus one right pane. `rightTab` says what
+  // occupies that pane — Preview and Notes are peers sharing the slot — or null
+  // when the editor fills the window. `zoomed` temporarily gives one side the
+  // whole window: 'right' for a full-window preview or a long notes session,
+  // 'left' for distraction-free writing.
+  //
+  // Deliberately NOT persisted: a maximized pane is a posture you adopt for a
+  // few minutes, not a layout you want to find again after a reload.
+  const [rightTab, setRightTab] = useState<RightTab | null>(
+    layoutRef.current.rightTab,
+  )
+  const [zoomed, setZoomed] = useState<'left' | 'right' | null>(null)
+
   // Whether section ranges are rendered over the preview pages (toolbar toggle).
   const [showSections, setShowSections] = useState(layoutRef.current.showSections)
   // Jump-to-line request forwarded to the editor; the nonce lets the same
@@ -164,7 +175,7 @@ export default function App() {
 
   // Recent edit-history snapshots for the selected project (all versions), from
   // its history.json. Captured as the user edits; browsable in the History
-  // drawer, where any snapshot can be restored.
+  // dialog, where any snapshot can be restored.
   const [history, setHistory] = useState<HistorySnapshot[]>([])
   const [showHistory, setShowHistory] = useState(false)
   // Live mirror of `history` for the async snapshot recorder/writer, plus the
@@ -179,11 +190,10 @@ export default function App() {
   const historyWriteTimer = useRef<number>(0)
 
   // Notes for the selected project (all versions), from its notes.json. Edited
-  // live in the Notes drawer; writes to Drive are debounced. Mirrored to refs
+  // live in the Notes pane; writes to Drive are debounced. Mirrored to refs
   // for the async writer, guarded like history so a project switch mid-flush
   // can't cross projects.
   const [notes, setNotes] = useState<Note[]>([])
-  const [showNotes, setShowNotes] = useState(layoutRef.current.showNotes)
   const notesRef = useRef<Note[]>([])
   const notesProjectIdRef = useRef<string | null>(null)
   const notesFileIdRef = useRef<string | null>(null)
@@ -314,19 +324,23 @@ export default function App() {
     document.title = projectName ? `${projectName} — kunal's scripts` : "kunal's scripts"
   }, [projectName])
 
-  // Persist which panels are open as they change.
+  // Persist which panels are open as they change. (`zoomed` is intentionally
+  // absent — see its declaration.)
   useEffect(() => {
-    layoutRef.current.showPreview = showPreview
     layoutRef.current.navCollapsed = navCollapsed
+    layoutRef.current.rightTab = rightTab
     layoutRef.current.showSections = showSections
-    layoutRef.current.showNotes = showNotes
     saveLayout(layoutRef.current)
-  }, [showPreview, navCollapsed, showSections, showNotes])
+  }, [navCollapsed, rightTab, showSections])
 
   // Entering mobile width, collapse the nav to its floating button so the
-  // editor fills the screen; the drawer is a tap away.
+  // editor fills the screen; the drawer is a tap away. Widening back to desktop
+  // drops any zoom: mobile expresses its single-view navigation *through*
+  // `zoomed` (see mobileView below), so without this you'd arrive on desktop
+  // with whatever the phone was last showing maximized over everything else.
   useEffect(() => {
     if (isMobile) setNavCollapsed(true)
+    else setZoomed(null)
   }, [isMobile])
 
   // Track the selected version for the async-save guard.
@@ -661,31 +675,32 @@ export default function App() {
     return URL.createObjectURL(blob)
   }, [])
 
-  // History and Notes are both right-side drawers, so opening one closes the
-  // other.
-  const toggleHistory = () =>
-    setShowHistory((v) => {
-      if (!v) setShowNotes(false)
-      return !v
-    })
-  const toggleNotes = () =>
-    setShowNotes((v) => {
-      if (!v) setShowHistory(false)
-      return !v
-    })
+  // Desktop: choose what fills the right pane. Picking the tab that's already
+  // showing collapses the pane, so each button is its own on/off switch. Any
+  // pick also drops a zoom — you asked to see that panel, not to keep whatever
+  // was maximized.
+  const selectRightTab = (tab: RightTab) => {
+    setShowHistory(false)
+    setRightTab((cur) => (cur === tab ? null : tab))
+    setZoomed(null)
+  }
+  const toggleZoom = () => setZoomed((z) => (z === 'right' ? null : 'right'))
 
-  // Mobile navigates between three full-screen views with one cycling control:
-  // Editor → Preview → Notes → Editor (see VersionBar).
+  // Mobile is the same layout model, permanently maximized: one pane fills the
+  // screen and the top-bar control cycles Editor → Preview → Notes → Editor.
+  // Deriving it from `rightTab`/`zoomed` rather than keeping a parallel mobile
+  // state is what keeps the two from disagreeing when the window is resized.
   type MobileView = 'editor' | 'preview' | 'notes'
-  const mobileView: MobileView = showNotes
-    ? 'notes'
-    : showPreview
-      ? 'preview'
-      : 'editor'
+  const mobileView: MobileView =
+    zoomed === 'right' && rightTab !== null ? rightTab : 'editor'
   const setMobileView = (view: MobileView) => {
     setShowHistory(false)
-    setShowNotes(view === 'notes')
-    if (view !== 'notes') setShowPreview(view === 'preview')
+    if (view === 'editor') {
+      setZoomed('left')
+    } else {
+      setRightTab(view)
+      setZoomed('right')
+    }
   }
   const cycleMobileView = () => {
     const order: MobileView[] = ['editor', 'preview', 'notes']
@@ -1130,6 +1145,12 @@ export default function App() {
               onNewVersion={newVersion}
               onExportPdf={exportPdf}
               onToggleNav={() => setNavCollapsed(false)}
+              rightTab={rightTab}
+              onSelectRightTab={selectRightTab}
+              zoomed={zoomed === 'right'}
+              onToggleZoom={toggleZoom}
+              onOpenHistory={() => setShowHistory((v) => !v)}
+              historyOpen={showHistory}
               mobileView={mobileView}
               onCycleView={cycleMobileView}
               onSetView={setMobileView}
@@ -1143,7 +1164,14 @@ export default function App() {
                 const editorNode = (
                   <Editor
                     key={`${selectedVersionId}:${editorReloadNonce}`}
-                    initialValue={content}
+                    // Seeded from the live text, not the last-saved baseline.
+                    // Collapsing or expanding a pane moves the editor between
+                    // the split and the bare workspace, which remounts it — and
+                    // re-seeding from `content` there would silently throw away
+                    // anything typed since the last auto-save (up to
+                    // AUTOSAVE_IDLE_MS of work). On a version switch the two are
+                    // equal anyway, since the load sets them together.
+                    initialValue={source}
                     onChange={handleSourceChange}
                     pageBreakLines={pageBreakLines}
                     sections={sections}
@@ -1160,39 +1188,6 @@ export default function App() {
                       }
                     }}
                     onRevealInPreview={revealInPreview}
-                    // Desktop only: Preview/History/Notes toggles live in the
-                    // editor toolbar. On mobile the top-bar cycle control drives
-                    // Editor/Preview/Notes instead.
-                    viewToggles={
-                      isMobile
-                        ? []
-                        : [
-                            {
-                              key: 'preview',
-                              glyph: '📄',
-                              label: 'Preview',
-                              title: 'Show or hide the preview',
-                              active: showPreview,
-                              onToggle: () => setShowPreview((v) => !v),
-                            },
-                            {
-                              key: 'history',
-                              glyph: '🕘',
-                              label: 'History',
-                              title: 'View and restore recent edits',
-                              active: showHistory,
-                              onToggle: toggleHistory,
-                            },
-                            {
-                              key: 'notes',
-                              glyph: '🗒️',
-                              label: 'Notes',
-                              title: 'Project notes',
-                              active: showNotes,
-                              onToggle: toggleNotes,
-                            },
-                          ]
-                    }
                   />
                 )
                 const previewNode = (
@@ -1214,13 +1209,59 @@ export default function App() {
                     onDeleteComment={deleteComment}
                   />
                 )
-                // The Characters & Locations panel only accompanies the
-                // preview, so with the preview hidden the editor fills the pane.
-                if (!showPreview) return editorNode
-                // Mobile: editor and preview are mutually exclusive full-screen
-                // views (the top-bar cycle control switches between them) — no
-                // side-by-side split, no insights panel.
-                if (isMobile) return previewNode
+                const notesNode = (
+                  <NotesPanel
+                    notes={notes}
+                    onCreate={addNote}
+                    onChangeNote={updateNote}
+                    onDeleteNote={deleteNote}
+                    onUploadMedia={uploadNoteMedia}
+                    onDeleteMedia={deleteNoteMedia}
+                    loadMedia={loadNoteMedia}
+                    onClose={() => setRightTab(null)}
+                    busy={busy}
+                  />
+                )
+
+                // Whatever occupies the right pane. Preview brings the
+                // Characters & Locations panel along under it — it's consulted
+                // against the rendered pages, and it stays collapsed by default
+                // so it costs nothing until it's wanted.
+                const rightNode =
+                  rightTab === 'notes' ? (
+                    notesNode
+                  ) : rightTab === 'preview' ? (
+                    <div className="rightstack">
+                      <div className="rightstack__preview">{previewNode}</div>
+                      <InsightsPanel
+                        source={source}
+                        onJump={jumpToLine}
+                        initialCollapsed={layoutRef.current.insightsCollapsed}
+                        onCollapsedChange={(collapsed) => {
+                          layoutRef.current.insightsCollapsed = collapsed
+                          saveLayout(layoutRef.current)
+                        }}
+                        initialGroups={layoutRef.current.insightsGroups}
+                        onGroupsChange={(groups) => {
+                          layoutRef.current.insightsGroups = groups
+                          saveLayout(layoutRef.current)
+                        }}
+                      />
+                    </div>
+                  ) : null
+
+                // Mobile shows exactly one pane, always — the cycle control
+                // drives `zoomed`/`rightTab`, so the same two values describe
+                // both densities and can't drift apart.
+                if (isMobile) {
+                  return zoomed === 'right' && rightNode !== null
+                    ? rightNode
+                    : editorNode
+                }
+
+                // Desktop: the split, unless one side has the window to itself.
+                if (rightNode === null || zoomed === 'left') return editorNode
+                if (zoomed === 'right') return rightNode
                 return (
                   <SplitPane
                     left={editorNode}
@@ -1229,25 +1270,7 @@ export default function App() {
                       layoutRef.current.splitLeftPercent = pct
                       saveLayout(layoutRef.current)
                     }}
-                    right={
-                      <div className="rightstack">
-                        <div className="rightstack__preview">{previewNode}</div>
-                        <InsightsPanel
-                          source={source}
-                          onJump={jumpToLine}
-                          initialCollapsed={layoutRef.current.insightsCollapsed}
-                          onCollapsedChange={(collapsed) => {
-                            layoutRef.current.insightsCollapsed = collapsed
-                            saveLayout(layoutRef.current)
-                          }}
-                          initialGroups={layoutRef.current.insightsGroups}
-                          onGroupsChange={(groups) => {
-                            layoutRef.current.insightsGroups = groups
-                            saveLayout(layoutRef.current)
-                          }}
-                        />
-                      </div>
-                    }
+                    right={rightNode}
                   />
                 )
               })()}
@@ -1257,19 +1280,6 @@ export default function App() {
                   currentText={source}
                   onRestore={restoreSnapshot}
                   onClose={() => setShowHistory(false)}
-                  busy={busy}
-                />
-              )}
-              {showNotes && (
-                <NotesPanel
-                  notes={notes}
-                  onCreate={addNote}
-                  onChangeNote={updateNote}
-                  onDeleteNote={deleteNote}
-                  onUploadMedia={uploadNoteMedia}
-                  onDeleteMedia={deleteNoteMedia}
-                  loadMedia={loadNoteMedia}
-                  onClose={() => setShowNotes(false)}
                   busy={busy}
                 />
               )}

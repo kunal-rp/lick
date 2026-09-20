@@ -22,17 +22,15 @@ const FORMATS: {
   { key: 'underline', label: 'U', accel: 'U', sample: '_text_' },
 ]
 
-// A view panel that can be shown/hidden from the toolbar (e.g. Preview).
-export interface ViewToggle {
-  key: string
-  label: string
-  glyph: string
-  title: string
-  active: boolean
-  onToggle: () => void
-}
-
-export function Toolbar({ viewToggles = [] }: { viewToggles?: ViewToggle[] }) {
+/**
+ * The editor's own toolbar: things you do to the text, and nothing else.
+ *
+ * It used to also carry the Preview / History / Notes toggles, which put
+ * workspace-level state under a document-level control — and left the view
+ * switches stranded in the left pane whenever you were reading the right one.
+ * Those now live in the VersionBar, which spans both panes.
+ */
+export function Toolbar() {
   const [editor] = useLexicalComposerContext()
 
   return (
@@ -55,27 +53,6 @@ export function Toolbar({ viewToggles = [] }: { viewToggles?: ViewToggle[] }) {
       })}
 
       <SearchBar />
-
-      {viewToggles.length > 0 && (
-        <div className="toolbar__views">
-          {viewToggles.map((v) => (
-            <button
-              key={v.key}
-              type="button"
-              title={v.title}
-              aria-pressed={v.active}
-              className={`toolbar__btn toolbar__toggle${
-                v.active ? ' toolbar__toggle--active' : ''
-              }`}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={v.onToggle}
-            >
-              <span className="toolbar__glyph">{v.glyph}</span>
-              <span className="toolbar__toggle-label">{v.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

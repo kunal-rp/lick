@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Version } from '../drive/versions'
+import type { RightTab } from '../layout'
 import './VersionBar.css'
 
 export type MobileView = 'editor' | 'preview' | 'notes'
@@ -19,6 +20,16 @@ interface VersionBarProps {
   onExportPdf: () => void
   /** Open the project drawer (mobile only; the button is hidden on desktop). */
   onToggleNav: () => void
+  /** What the right pane shows, or null when the editor fills the workspace. */
+  rightTab: RightTab | null
+  /** Pick the right pane's content; picking the active one collapses the pane. */
+  onSelectRightTab: (tab: RightTab) => void
+  /** Whether the right pane is expanded over the editor. */
+  zoomed: boolean
+  onToggleZoom: () => void
+  /** Open the edit-history dialog (version-scoped, hence its home here). */
+  onOpenHistory: () => void
+  historyOpen: boolean
   /** Current mobile view; drives the cycle control (mobile only). */
   mobileView: MobileView
   /** Advance Editor → Preview → Notes → Editor (mobile only). */
@@ -32,6 +43,12 @@ interface VersionBarProps {
   showSections: boolean
   onToggleSections: () => void
 }
+
+// Desktop view switcher: the right pane's two occupants, as peers.
+const RIGHT_TABS: { key: RightTab; glyph: string; label: string }[] = [
+  { key: 'preview', glyph: '📄', label: 'Preview' },
+  { key: 'notes', glyph: '🗒️', label: 'Notes' },
+]
 
 const VIEWS: { key: MobileView; glyph: string; label: string }[] = [
   { key: 'editor', glyph: '✏️', label: 'Editor' },
@@ -53,6 +70,12 @@ export function VersionBar({
   onNewVersion,
   onExportPdf,
   onToggleNav,
+  rightTab,
+  onSelectRightTab,
+  zoomed,
+  onToggleZoom,
+  onOpenHistory,
+  historyOpen,
   mobileView,
   onCycleView,
   onSetView,
@@ -166,6 +189,70 @@ export function VersionBar({
       </label>
 
       <div className="verbar__spacer" />
+
+      {/* Desktop view controls. These live here, in the app's own chrome,
+          rather than inside the editor's text toolbar: what occupies the right
+          pane is workspace state, not something you do to the document. Hidden
+          on mobile, where the cycle control at the far right does the job. */}
+      <div className="verbar__views" role="group" aria-label="Right pane">
+        {RIGHT_TABS.map((t) => {
+          const active = rightTab === t.key
+          return (
+            <button
+              key={t.key}
+              type="button"
+              className={`verbar__view-btn${
+                active ? ' verbar__view-btn--active' : ''
+              }`}
+              onClick={() => onSelectRightTab(t.key)}
+              aria-pressed={active}
+              title={
+                active
+                  ? `Hide ${t.label.toLowerCase()} and let the editor fill the window`
+                  : `Show ${t.label.toLowerCase()} beside the editor`
+              }
+            >
+              <span aria-hidden="true">{t.glyph}</span>
+              <span className="verbar__view-btn-label">{t.label}</span>
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          className={`verbar__view-btn verbar__view-btn--zoom${
+            zoomed ? ' verbar__view-btn--active' : ''
+          }`}
+          onClick={onToggleZoom}
+          disabled={rightTab === null}
+          aria-pressed={zoomed}
+          aria-label={zoomed ? 'Restore the split' : 'Expand the right pane'}
+          title={
+            rightTab === null
+              ? 'Nothing to expand — the editor already fills the window'
+              : zoomed
+                ? 'Back to the split view'
+                : 'Expand over the editor for a full-window view'
+          }
+        >
+          {zoomed ? '⤡' : '⤢'}
+        </button>
+      </div>
+
+      {/* History is scoped to the open version, so it belongs beside the
+          version selector — and it's a look-and-restore errand, so it opens as
+          a dialog rather than claiming a pane. */}
+      <button
+        type="button"
+        className={`verbar__btn verbar__btn--inline-action${
+          historyOpen ? ' verbar__btn--pressed' : ''
+        }`}
+        onClick={onOpenHistory}
+        aria-haspopup="dialog"
+        aria-expanded={historyOpen}
+        title="View and restore recent edits to this version"
+      >
+        History
+      </button>
 
       {savedTime !== null && !saving && (
         <span className="verbar__saved-at" title={`Last saved at ${savedTime}`}>

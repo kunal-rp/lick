@@ -1,15 +1,26 @@
-// Remembers the workspace panel layout — which panels are open and how the
-// editor/preview split is sized — so it's restored on reload and in new tabs.
-// Purely a local UI preference (like the last-opened file), kept in
-// localStorage; nothing here touches Drive.
+// Remembers the workspace panel layout — what occupies the right pane and how
+// the split is sized — so it's restored on reload and in new tabs. Purely a
+// local UI preference (like the last-opened file), kept in localStorage;
+// nothing here touches Drive.
 
 const KEY = 'fountain-editor:layout'
 
+/**
+ * What the right pane shows. The editor always owns the left pane; the right
+ * pane is a slot that Preview and Notes share as peers, and `null` collapses it
+ * so the editor fills the workspace.
+ *
+ * Deliberately one value rather than a boolean per panel: only one thing can
+ * occupy the slot, so the state can't express a combination the layout can't
+ * render.
+ */
+export type RightTab = 'preview' | 'notes'
+
 export interface LayoutPrefs {
-  /** Whether the preview (and the Characters & Locations panel) is shown. */
-  showPreview: boolean
   /** Whether the left file-nav is collapsed. */
   navCollapsed: boolean
+  /** What the right pane shows, or null when the editor fills the workspace. */
+  rightTab: RightTab | null
   /** Editor pane width as a percentage of the split (0–100). */
   splitLeftPercent: number
   /** Whether the Characters & Locations panel is collapsed. */
@@ -18,8 +29,6 @@ export interface LayoutPrefs {
   insightsGroups: InsightsGroups
   /** Whether section ranges are rendered over the preview pages. */
   showSections: boolean
-  /** Whether the project notes drawer is open. */
-  showNotes: boolean
 }
 
 /** Per-group visibility for the Characters & Locations panel. */
@@ -36,29 +45,49 @@ const DEFAULT_GROUPS: InsightsGroups = {
 }
 
 const DEFAULTS: LayoutPrefs = {
-  showPreview: true,
   navCollapsed: false,
+  rightTab: 'preview',
   splitLeftPercent: 50,
-  insightsCollapsed: false,
+  insightsCollapsed: true,
   insightsGroups: { ...DEFAULT_GROUPS },
   showSections: false,
-  showNotes: false,
+}
+
+/**
+ * The pre-tab shape, where Preview was a boolean and Notes was an overlay
+ * drawer that could sit *on top of* it. Read once so an existing install keeps
+ * whatever it had open rather than snapping back to the default.
+ */
+interface LegacyPrefs {
+  showPreview?: unknown
+  showNotes?: unknown
+}
+
+// Notes drew over the preview, so with both flags set Notes is what was
+// actually on screen — that's the tab to restore.
+function migrateRightTab(legacy: LegacyPrefs): RightTab | null {
+  if (legacy.showNotes === true) return 'notes'
+  if (legacy.showPreview === true) return 'preview'
+  if (legacy.showPreview === false) return null
+  return DEFAULTS.rightTab
 }
 
 export function loadLayout(): LayoutPrefs {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw !== null) {
-      const parsed = JSON.parse(raw) as Partial<LayoutPrefs>
+      const parsed = JSON.parse(raw) as Partial<LayoutPrefs> & LegacyPrefs
       return {
-        showPreview:
-          typeof parsed.showPreview === 'boolean'
-            ? parsed.showPreview
-            : DEFAULTS.showPreview,
         navCollapsed:
           typeof parsed.navCollapsed === 'boolean'
             ? parsed.navCollapsed
             : DEFAULTS.navCollapsed,
+        rightTab:
+          parsed.rightTab === 'preview' ||
+          parsed.rightTab === 'notes' ||
+          parsed.rightTab === null
+            ? parsed.rightTab
+            : migrateRightTab(parsed),
         splitLeftPercent:
           typeof parsed.splitLeftPercent === 'number'
             ? Math.min(80, Math.max(20, parsed.splitLeftPercent))
@@ -85,10 +114,6 @@ export function loadLayout(): LayoutPrefs {
           typeof parsed.showSections === 'boolean'
             ? parsed.showSections
             : DEFAULTS.showSections,
-        showNotes:
-          typeof parsed.showNotes === 'boolean'
-            ? parsed.showNotes
-            : DEFAULTS.showNotes,
       }
     }
   } catch {

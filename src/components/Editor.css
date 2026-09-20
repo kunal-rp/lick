@@ -218,36 +218,6 @@
   color: var(--text-muted);
 }
 
-/* Push the view toggles to the opposite end of the toolbar. */
-.toolbar__views {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-}
-
-/* View-toggle buttons (Preview). */
-.toolbar__toggle {
-  color: var(--text-muted);
-}
-
-.toolbar__toggle:active {
-  /* Not a momentary action like the format buttons — don't flash accent. */
-  background: var(--hover);
-  border-color: transparent;
-  color: var(--text);
-}
-
-.toolbar__toggle--active,
-.toolbar__toggle--active:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-}
-
-.toolbar__toggle-label {
-  font-size: 12px;
-}
-
 .editor__surface {
   position: relative;
   flex: 1 1 auto;
@@ -676,10 +646,5 @@
   .toolbar__replace {
     width: 260px;
     max-width: calc(100vw - 20px);
-  }
-
-  /* Tight on space — the view toggles show their icon only. */
-  .toolbar__toggle-label {
-    display: none;
   }
 }

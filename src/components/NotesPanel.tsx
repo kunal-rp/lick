@@ -257,7 +257,7 @@ function NotesListView({
   }, [notes, query])
 
   return (
-    <aside className="notes" role="dialog" aria-label="Project notes">
+    <aside className="notes" role="region" aria-label="Project notes">
       <div className="notes__nav notes__nav--list">
         <span className="notes__nav-spacer" />
         <button
@@ -447,7 +447,7 @@ function NoteView({
   const firstTextId = note.blocks.find((b) => b.type === 'text')?.id ?? null
 
   return (
-    <aside className="notes" role="dialog" aria-label="Note">
+    <aside className="notes" role="region" aria-label="Note">
       <div className="notes__nav">
         <button
           type="button"
