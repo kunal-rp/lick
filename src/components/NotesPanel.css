@@ -545,3 +545,116 @@
 .companion > .notes {
   border-left: 1px solid var(--border);
 }
+
+/*
+ * A quoted stretch of screenplay inside a note.
+ *
+ * Styled as a minimal code block — inset panel, monospace, line numbers in a
+ * gutter — because that is exactly what it is: verbatim material from
+ * somewhere else, reproduced with enough address information to go find it.
+ * The muted treatment keeps it from competing with the note's own prose.
+ */
+.scriptref {
+  margin: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.scriptref__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--raised);
+}
+
+.scriptref__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scriptref__open:hover {
+  color: var(--accent);
+}
+
+.scriptref__draft {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scriptref__range {
+  font-variant-numeric: tabular-nums;
+}
+
+.scriptref__remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.scriptref__remove svg {
+  width: 13px;
+  height: 13px;
+}
+
+.scriptref__remove:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.scriptref__body {
+  margin: 0;
+  padding: 8px 0;
+  /* The quote keeps the script's own line breaks; long lines scroll rather
+     than rewrap, so the numbers stay aligned with what they number. */
+  overflow-x: auto;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.scriptref__line {
+  display: flex;
+  gap: 10px;
+  white-space: pre;
+}
+
+.scriptref__num {
+  flex: 0 0 auto;
+  min-width: 4ch;
+  padding-left: 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.scriptref__text {
+  padding-right: 12px;
+}

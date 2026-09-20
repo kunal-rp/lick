@@ -5,11 +5,18 @@ import {
   $getSelection,
   $isElementNode,
   $isRangeSelection,
+  type Point,
 } from 'lexical'
 
 interface Props {
   /** Called with the caret's 0-based source line whenever it moves. */
   onCaretLine?: (line: number) => void
+  /**
+   * Called with the 0-based line range the selection spans, or null when it's
+   * collapsed. Lines rather than character offsets because that's the unit a
+   * script reference is addressed in.
+   */
+  onSelectedLines?: (range: { startLine: number; endLine: number } | null) => void
 }
 
 /**
@@ -24,34 +31,63 @@ interface Props {
  * the caret's paragraph index — no text measuring, and cheap enough to run on
  * every update.
  */
-export function CaretLinePlugin({ onCaretLine }: Props) {
+export function CaretLinePlugin({ onCaretLine, onSelectedLines }: Props) {
   const lastRef = useRef(-1)
+  const lastRangeRef = useRef('')
 
   const [editor] = useLexicalComposerContext()
 
   useEffect(() => {
-    if (onCaretLine === undefined) return
     const read = () => {
       editor.getEditorState().read(() => {
         const selection = $getSelection()
-        if (!$isRangeSelection(selection)) return
-        const node = selection.anchor.getNode()
-        const paragraph = $isElementNode(node) ? node : node.getParent()
-        if (paragraph === null) return
-        const key = paragraph.getKey()
-        const line = $getRoot()
-          .getChildren()
-          .findIndex((child) => child.getKey() === key)
+        if (!$isRangeSelection(selection)) {
+          if (lastRangeRef.current !== '') {
+            lastRangeRef.current = ''
+            onSelectedLines?.(null)
+          }
+          return
+        }
+
+        const lines = $getRoot().getChildren()
+        const lineOf = (key: string) =>
+          lines.findIndex((child) => child.getKey() === key)
+        const paragraphOf = (point: Point) => {
+          const node = point.getNode()
+          return $isElementNode(node) ? node : node.getParent()
+        }
+
+        const anchorPara = paragraphOf(selection.anchor)
+        const focusPara = paragraphOf(selection.focus)
+        if (anchorPara === null || focusPara === null) return
+
+        const anchorLine = lineOf(anchorPara.getKey())
+        const focusLine = lineOf(focusPara.getKey())
+        if (anchorLine < 0 || focusLine < 0) return
+
         // Only report changes: this runs on every keystroke, and re-reporting
-        // the same line would re-render the outline for every character typed.
-        if (line < 0 || line === lastRef.current) return
-        lastRef.current = line
-        onCaretLine(line)
+        // the same values would re-render the sidebar for every character.
+        if (focusLine !== lastRef.current) {
+          lastRef.current = focusLine
+          onCaretLine?.(focusLine)
+        }
+
+        const range = selection.isCollapsed()
+          ? null
+          : {
+              startLine: Math.min(anchorLine, focusLine),
+              endLine: Math.max(anchorLine, focusLine),
+            }
+        const sig = range === null ? '' : `${range.startLine}:${range.endLine}`
+        if (sig !== lastRangeRef.current) {
+          lastRangeRef.current = sig
+          onSelectedLines?.(range)
+        }
       })
     }
     read()
     return editor.registerUpdateListener(read)
-  }, [editor, onCaretLine])
+  }, [editor, onCaretLine, onSelectedLines])
 
   return null
 }

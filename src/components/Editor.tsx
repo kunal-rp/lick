@@ -40,6 +40,10 @@ interface EditorProps {
   onRevealInPreview?: (line: number) => void
   /** Reports the caret's source line, so the outline can mark where you are. */
   onCaretLine?: (line: number) => void
+  /** Reports the selected line range, so a note can quote it. */
+  onSelectedLines?: (
+    range: { startLine: number; endLine: number } | null,
+  ) => void
 }
 
 /**
@@ -61,6 +65,7 @@ export function Editor({
   onScrollChange,
   onRevealInPreview,
   onCaretLine,
+  onSelectedLines,
 }: EditorProps) {
   const initialConfig = {
     namespace: 'fountain-editor',
@@ -126,7 +131,10 @@ export function Editor({
         <EmphasisShortcutsPlugin />
         <JumpToLinePlugin target={jumpTo ?? null} />
         <RevealPreviewPlugin onReveal={onRevealInPreview} />
-        <CaretLinePlugin onCaretLine={onCaretLine} />
+        <CaretLinePlugin
+          onCaretLine={onCaretLine}
+          onSelectedLines={onSelectedLines}
+        />
         <CaretVisibilityPlugin scrollRef={surfaceRef} />
         <OnChangeFountainPlugin onChange={onChange} />
       </LexicalComposer>

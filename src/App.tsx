@@ -56,12 +56,14 @@ import {
   makeId,
   makeMediaBlock,
   makeNote,
+  makeScriptRefBlock,
   mediaBlocks,
   normalizeBlocks,
   parseNotes,
   serializeNotes,
   type MediaBlock,
   type Note,
+  type ScriptRefBlock,
 } from './notes'
 import { useDriveAuth } from './drive/useDriveAuth'
 import { useWorkingFolder } from './drive/useWorkingFolder'
@@ -178,6 +180,13 @@ export default function App() {
   // The caret's source line, reported by the editor — what the Outline marks
   // as "you are here".
   const [caretLine, setCaretLine] = useState(0)
+
+  // The script lines currently selected, from whichever pane the writer
+  // selected in. This is what a note quotes when you press its quote button.
+  const [scriptSelection, setScriptSelection] = useState<{
+    startLine: number
+    endLine: number
+  } | null>(null)
 
   /**
    * Go to a source line from outside both panes — the Outline and Cast tabs.
@@ -674,7 +683,10 @@ export default function App() {
   function deleteNoteMedia(noteId: string, blockId: string) {
     const note = notesRef.current.find((n) => n.id === noteId)
     const block = note?.blocks.find((b) => b.id === blockId)
-    if (note === undefined || block === undefined || block.type === 'text') return
+    // Only media blocks have a file behind them; a reference is pure data and
+    // is removed by the note view itself.
+    if (note === undefined || block === undefined) return
+    if (block.type !== 'image' && block.type !== 'video') return
     const fileId = block.fileId
     const next = notesRef.current.map((n) =>
       n.id === noteId
@@ -698,6 +710,50 @@ export default function App() {
     const blob = await readFileBlob(fileId)
     return URL.createObjectURL(blob)
   }, [])
+
+  /**
+   * Quote the selected script lines for a note.
+   *
+   * The lines are read out of the live source rather than from whatever the
+   * selection's `toString()` gave, so the quote is the script's own text —
+   * markers, indentation and all — instead of the preview's rendering of it.
+   */
+  function createScriptRef(): ScriptRefBlock | null {
+    if (scriptSelection === null || selectedVersionId === null) return null
+    const label =
+      versions.find((v) => v.file.id === selectedVersionId)?.label ?? 'draft'
+    const lines = source.split('\n')
+    const start = Math.max(0, scriptSelection.startLine)
+    const end = Math.min(lines.length - 1, scriptSelection.endLine)
+    if (start > end) return null
+    return makeScriptRefBlock(Date.now(), {
+      versionId: selectedVersionId,
+      versionLabel: label,
+      startLine: start,
+      endLine: end,
+      text: lines.slice(start, end + 1).join('\n'),
+    })
+  }
+
+  /**
+   * Follow a reference back to the script: switch to the draft it was taken
+   * from if that isn't the one open, then jump to its lines.
+   *
+   * The draft may have been deleted since, in which case there's nothing to
+   * switch to and the jump happens in whatever is open — the quote itself is
+   * still readable in the note, which is the point of keeping a snapshot.
+   */
+  function openScriptRef(block: ScriptRefBlock) {
+    const exists =
+      selectedProjectId !== null &&
+      (versionsByProject[selectedProjectId] ?? []).some(
+        (f) => f.id === block.versionId,
+      )
+    if (exists && block.versionId !== selectedVersionId && selectedProjectId !== null) {
+      selectVersion(selectedProjectId, block.versionId)
+    }
+    goToLine(block.startLine)
+  }
 
   // Choose what sits beside the editor. The switch in the top bar and the
   // palette's View commands both come through here.
@@ -1308,6 +1364,7 @@ export default function App() {
                     }}
                     onRevealInPreview={revealInPreview}
                     onCaretLine={setCaretLine}
+                    onSelectedLines={setScriptSelection}
                   />
                 )
                 const notesNode = (
@@ -1319,6 +1376,9 @@ export default function App() {
                     onUploadMedia={uploadNoteMedia}
                     onDeleteMedia={deleteNoteMedia}
                     loadMedia={loadNoteMedia}
+                    onCreateScriptRef={createScriptRef}
+                    canAddScriptRef={scriptSelection !== null}
+                    onOpenScriptRef={openScriptRef}
                     onClose={() => chooseCompanion('none')}
                     busy={busy}
                   />
@@ -1336,6 +1396,9 @@ export default function App() {
                     // Off-stage it keeps paginating but must not size itself
                     // to that box; showing it again re-fits the page.
                     active={companion === 'preview'}
+                    onSelectRange={({ startLine, endLine }) =>
+                      setScriptSelection({ startLine, endLine })
+                    }
                   />
                 )
                 // The editor, and whatever shares the main area with it.

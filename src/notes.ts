@@ -39,7 +39,32 @@ export interface MediaBlock {
   name: string
 }
 
-export type NoteBlock = TextBlock | MediaBlock
+/**
+ * A quoted stretch of the screenplay, anchored to the draft it came from.
+ *
+ * This is what replaced commenting. A comment lived on the page and pointed at
+ * a character range, so it belonged to one draft and broke the moment the text
+ * under it moved. A reference is the other way round: it lives in the note,
+ * and it records *where it was taken from* — which draft, which lines — plus a
+ * snapshot of what it said at the time. Editing the script afterwards can't
+ * invalidate it, because it's a quotation, not an anchor.
+ */
+export interface ScriptRefBlock {
+  id: string
+  type: 'script-ref'
+  /** Drive file id of the draft quoted. */
+  versionId: string
+  /** That draft's label when the reference was taken, e.g. "v3". */
+  versionLabel: string
+  /** 0-based source lines, inclusive. */
+  startLine: number
+  endLine: number
+  /** The lines as they read when quoted. Display only — never re-resolved. */
+  text: string
+  createdAt: number
+}
+
+export type NoteBlock = TextBlock | MediaBlock | ScriptRefBlock
 
 export interface Note {
   /** Unique id for this note. */
@@ -77,6 +102,19 @@ export function makeMediaBlock(
   return { id: makeId(now), type, fileId, mime, name }
 }
 
+export function makeScriptRefBlock(
+  now: number,
+  ref: {
+    versionId: string
+    versionLabel: string
+    startLine: number
+    endLine: number
+    text: string
+  },
+): ScriptRefBlock {
+  return { id: makeId(now), type: 'script-ref', ...ref, createdAt: now }
+}
+
 /** Build a new, empty note (one blank text block so it's ready to type into). */
 export function makeNote(now: number): Note {
   return {
@@ -103,7 +141,9 @@ export function normalizeBlocks(blocks: NoteBlock[], now: number): NoteBlock[] {
 
 /** The media blocks in a note (e.g. to clean up their files on delete). */
 export function mediaBlocks(note: Note): MediaBlock[] {
-  return note.blocks.filter((b): b is MediaBlock => b.type !== 'text')
+  return note.blocks.filter(
+    (b): b is MediaBlock => b.type === 'image' || b.type === 'video',
+  )
 }
 
 /**
@@ -171,6 +211,10 @@ export function noteSnippet(note: Note): string {
   }
   const media = mediaBlocks(note)[0]
   if (media !== undefined) return media.type === 'video' ? 'Video' : 'Photo'
+  const ref = note.blocks.find((b) => b.type === 'script-ref')
+  if (ref !== undefined && ref.type === 'script-ref') {
+    return `${ref.versionLabel} · line ${ref.startLine + 1}`
+  }
   return ''
 }
 
@@ -195,8 +239,30 @@ function parseBlock(raw: unknown, now: number): NoteBlock | null {
     fileId?: unknown
     mime?: unknown
     name?: unknown
+    versionId?: unknown
+    versionLabel?: unknown
+    startLine?: unknown
+    endLine?: unknown
+    createdAt?: unknown
   }
   const id = typeof b.id === 'string' ? b.id : makeId(now)
+  if (b.type === 'script-ref') {
+    // A reference is only meaningful with a draft to attribute it to and the
+    // text it quoted; anything short of that is dropped rather than rendered
+    // as an empty block the reader can't act on.
+    if (typeof b.versionId !== 'string' || typeof b.text !== 'string') return null
+    const startLine = typeof b.startLine === 'number' ? b.startLine : 0
+    return {
+      id,
+      type: 'script-ref',
+      versionId: b.versionId,
+      versionLabel: typeof b.versionLabel === 'string' ? b.versionLabel : '',
+      startLine,
+      endLine: typeof b.endLine === 'number' ? b.endLine : startLine,
+      text: b.text,
+      createdAt: typeof b.createdAt === 'number' ? b.createdAt : now,
+    }
+  }
   if (b.type === 'image' || b.type === 'video') {
     if (typeof b.fileId !== 'string') return null
     return {

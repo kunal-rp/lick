@@ -20,6 +20,8 @@ import { $convertFromMarkdownString, CHECK_LIST, UNORDERED_LIST } from '@lexical
 import {
   type MediaBlock,
   type Note,
+  type NoteBlock,
+  type ScriptRefBlock,
   isSerializedState,
   makeTextBlock,
   noteSnippet,
@@ -61,6 +63,16 @@ interface NotesPanelProps {
   onDeleteMedia: (noteId: string, blockId: string) => void
   /** Fetch a media file's bytes as an object URL for display. */
   loadMedia: (fileId: string) => Promise<string>
+  /**
+   * Build a reference block from whatever is selected in the script right now,
+   * or null if nothing is. The note decides *where* it lands; the workspace
+   * knows *what* is selected, so the two meet here.
+   */
+  onCreateScriptRef?: () => ScriptRefBlock | null
+  /** Whether there's a script selection to quote (drives the button's state). */
+  canAddScriptRef?: boolean
+  /** Open a reference's draft and jump to its lines. */
+  onOpenScriptRef?: (block: ScriptRefBlock) => void
   onClose: () => void
   busy: boolean
 }
@@ -185,6 +197,9 @@ export function NotesPanel({
   onUploadMedia,
   onDeleteMedia,
   loadMedia,
+  onCreateScriptRef,
+  canAddScriptRef = false,
+  onOpenScriptRef,
   onClose,
   busy,
 }: NotesPanelProps) {
@@ -214,6 +229,9 @@ export function NotesPanel({
         onUploadMedia={onUploadMedia}
         onDeleteMedia={onDeleteMedia}
         loadMedia={loadMedia}
+        onCreateScriptRef={onCreateScriptRef}
+        canAddScriptRef={canAddScriptRef}
+        onOpenScriptRef={onOpenScriptRef}
         busy={busy}
       />
     )
@@ -360,6 +378,9 @@ function NoteView({
   onUploadMedia,
   onDeleteMedia,
   loadMedia,
+  onCreateScriptRef,
+  canAddScriptRef = false,
+  onOpenScriptRef,
   busy,
 }: {
   note: Note
@@ -369,6 +390,9 @@ function NoteView({
   onUploadMedia: (files: File[]) => Promise<MediaBlock[]>
   onDeleteMedia: (noteId: string, blockId: string) => void
   loadMedia: (fileId: string) => Promise<string>
+  onCreateScriptRef?: () => ScriptRefBlock | null
+  canAddScriptRef?: boolean
+  onOpenScriptRef?: (block: ScriptRefBlock) => void
   busy: boolean
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -444,6 +468,38 @@ function NoteView({
     activeEditorRef.current?.dispatchCommand(command, undefined)
   }
 
+  // Splice a block in after the focused text run, with a fresh run below it so
+  // there's somewhere to keep writing — the same placement media uses.
+  function insertBlock(block: NoteBlock) {
+    const nowTs = Date.now()
+    const fid = focusedBlockRef.current
+    const idx = fid !== null ? note.blocks.findIndex((b) => b.id === fid) : -1
+    const at = idx >= 0 ? idx + 1 : note.blocks.length
+    const after = makeTextBlock(nowTs)
+    const blocks = normalizeBlocks(
+      [...note.blocks.slice(0, at), block, after, ...note.blocks.slice(at)],
+      nowTs,
+    )
+    setFocusBlockId(after.id)
+    onChangeNote(note.id, { blocks })
+  }
+
+  function removeBlock(blockId: string) {
+    onChangeNote(note.id, {
+      blocks: normalizeBlocks(
+        note.blocks.filter((b) => b.id !== blockId),
+        Date.now(),
+      ),
+    })
+  }
+
+  // Quote the current script selection into this note. Nothing selected means
+  // nothing to quote, so the button is disabled rather than guessing a range.
+  function addScriptRef() {
+    const block = onCreateScriptRef?.()
+    if (block != null) insertBlock(block)
+  }
+
   const firstTextId = note.blocks.find((b) => b.type === 'text')?.id ?? null
 
   return (
@@ -496,6 +552,13 @@ function NoteView({
               onEditorFocus={handleEditorFocus}
               onChange={(text) => setBlockText(block.id, text)}
             />
+          ) : block.type === 'script-ref' ? (
+            <ScriptRefView
+              key={block.id}
+              block={block}
+              onOpen={() => onOpenScriptRef?.(block)}
+              onDelete={() => removeBlock(block.id)}
+            />
           ) : (
             <MediaBlockView
               key={block.id}
@@ -538,6 +601,23 @@ function NoteView({
           title="Add photo or video"
         >
           {uploading ? <span className="notes__spinner" /> : <CameraIcon />}
+        </button>
+        <button
+          type="button"
+          className="notes__tool"
+          // Don't take focus: the button reads the *script's* selection, and
+          // on some browsers focusing here would clear it.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={addScriptRef}
+          disabled={!canAddScriptRef}
+          aria-label="Quote the selected script lines"
+          title={
+            canAddScriptRef
+              ? 'Quote the selected script lines'
+              : 'Select lines in the script to quote them here'
+          }
+        >
+          <QuoteIcon />
         </button>
         <span className="notes__bottombar-side" />
       </div>
@@ -731,5 +811,90 @@ function MediaBlockView({
         ×
       </button>
     </figure>
+  )
+}
+
+/**
+ * A quoted stretch of screenplay, rendered as a minimal code block.
+ *
+ * Deliberately plain: a header saying where it came from, then the lines in
+ * the editor's own monospace with their source numbers in a gutter. The point
+ * is that it reads as *quoted material* — visibly not part of the note's own
+ * prose — and that the numbers let you find it again in the script.
+ *
+ * The text is a snapshot and never re-resolved against the current draft. That
+ * is the whole reason this replaced commenting: it can't go stale-but-silent,
+ * because it isn't claiming to still be there. Opening it takes you to where
+ * it was, and what you find is whatever the script says now.
+ */
+function ScriptRefView({
+  block,
+  onOpen,
+  onDelete,
+}: {
+  block: ScriptRefBlock
+  onOpen: () => void
+  onDelete: () => void
+}) {
+  const lines = block.text.split('\n')
+  const range =
+    block.endLine > block.startLine
+      ? `lines ${block.startLine + 1}–${block.endLine + 1}`
+      : `line ${block.startLine + 1}`
+
+  return (
+    <figure className="scriptref">
+      <figcaption className="scriptref__head">
+        <button
+          type="button"
+          className="scriptref__open"
+          onClick={onOpen}
+          title="Go to these lines in the script"
+        >
+          <span className="scriptref__draft">{block.versionLabel}</span>
+          <span className="scriptref__range">{range}</span>
+        </button>
+        <button
+          type="button"
+          className="scriptref__remove"
+          onClick={onDelete}
+          aria-label="Remove reference"
+          title="Remove reference"
+        >
+          <CloseIcon />
+        </button>
+      </figcaption>
+      <pre className="scriptref__body">
+        {lines.map((line, i) => (
+          <span key={i} className="scriptref__line">
+            <span className="scriptref__num" aria-hidden="true">
+              {block.startLine + i + 1}
+            </span>
+            <span className="scriptref__text">{line === '' ? '\u00a0' : line}</span>
+          </span>
+        ))}
+      </pre>
+    </figure>
+  )
+}
+
+// Quote mark, for the "reference the script" tool.
+function QuoteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 7H5a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3v2a2 2 0 0 1-2 2H5" />
+      <path d="M19 7h-4a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3v2a2 2 0 0 1-2 2h-1" />
+    </svg>
+  )
+}
+
+// A small close glyph, matching the app's icon set weight.
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" aria-hidden="true">
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
   )
 }
