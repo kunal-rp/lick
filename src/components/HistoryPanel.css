@@ -279,3 +279,20 @@
   filter: brightness(1.08);
   background: var(--accent);
 }
+
+.history__chevron,
+.history__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history__chevron svg {
+  width: 13px;
+  height: 13px;
+}
+
+.history__close svg {
+  width: 15px;
+  height: 15px;
+}

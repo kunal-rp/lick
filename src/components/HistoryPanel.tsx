@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { HistorySnapshot } from '../history'
 import { collapseUnchanged, diffLines, diffSummary } from '../diff'
+import { ChevronDownIcon, ChevronRightIcon, CloseIcon } from './icons'
 import './HistoryPanel.css'
 
 interface HistoryPanelProps {
@@ -89,7 +90,7 @@ export function HistoryPanel({
             aria-label="Close history"
             title="Close"
           >
-            ×
+            <CloseIcon />
           </button>
         </div>
 
@@ -114,7 +115,9 @@ export function HistoryPanel({
                       setExpandedId((id) => (id === snap.id ? null : snap.id))
                     }
                   >
-                    <span className="history__chevron">{expanded ? '▾' : '▸'}</span>
+                    <span className="history__chevron">
+                      {expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+                    </span>
                     <span className={`history__badge history__badge--${snap.kind}`}>
                       {KIND_LABEL[snap.kind]}
                     </span>

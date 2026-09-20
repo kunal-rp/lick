@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { $getSelection, $getRoot, $isRangeSelection } from 'lexical'
 import { scrollOffsetIntoView, selectRange } from './offsets'
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ReplaceIcon,
+  SearchIcon,
+} from '../icons'
 
 /** All start offsets where `query` occurs in `text` (case-insensitive). */
 function findMatches(text: string, query: string): number[] {
@@ -111,7 +117,7 @@ export function SearchBar() {
   return (
     <div className="toolbar__search" role="search">
       <span className="toolbar__search-icon" aria-hidden="true">
-        ⌕
+        <SearchIcon />
       </span>
       <input
         ref={inputRef}
@@ -140,9 +146,7 @@ export function SearchBar() {
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => step(-1)}
       >
-        <span className="toolbar__glyph" aria-hidden="true">
-          ‹
-        </span>
+        <ChevronLeftIcon />
       </button>
       <button
         type="button"
@@ -152,9 +156,7 @@ export function SearchBar() {
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => step(1)}
       >
-        <span className="toolbar__glyph" aria-hidden="true">
-          ›
-        </span>
+        <ChevronRightIcon />
       </button>
       <button
         type="button"
@@ -166,9 +168,7 @@ export function SearchBar() {
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setReplaceOpen((o) => !o)}
       >
-        <span className="toolbar__glyph" aria-hidden="true">
-          ⇄
-        </span>
+        <ReplaceIcon />
       </button>
 
       {replaceOpen && (

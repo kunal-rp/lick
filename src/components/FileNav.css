@@ -327,3 +327,75 @@
     background: rgba(0, 0, 0, 0.45);
   }
 }
+
+/*
+ * Icon alignment. The chrome draws with inline SVG (components/icons.tsx)
+ * rather than emoji, so the rows that pair an icon with a label need to be
+ * flex containers — a bare <svg> in a text flow sits on the line box and
+ * leaves the label riding high next to it.
+ */
+.tree__label,
+.tree__version,
+.tree__pdf {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Icons take their size from the row's type rather than the 24px viewBox. */
+.tree__root svg,
+.tree__label svg,
+.tree__version svg,
+.tree__pdf svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+}
+
+/* A selected row inverts, so its icon has to come along or it vanishes. */
+.tree__version-row.is-selected .tree__version svg {
+  color: inherit;
+}
+
+.tree__twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tree__twisty svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tree__delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tree__delete svg {
+  width: 14px;
+  height: 14px;
+}
+
+.filenav__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filenav__icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.filenav__theme-glyph {
+  display: inline-flex;
+  align-items: center;
+}
+
+.filenav__theme-glyph svg {
+  width: 14px;
+  height: 14px;
+}

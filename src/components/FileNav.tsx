@@ -1,6 +1,18 @@
 import type { DriveFile } from '../drive/files'
 import { listPdfs, parseVersions } from '../drive/versions'
 import type { Theme } from '../theme'
+import {
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  FilePdfIcon,
+  FileTextIcon,
+  FolderIcon,
+  MenuIcon,
+  MoonIcon,
+  SunIcon,
+  TrashIcon,
+} from './icons'
 import './FileNav.css'
 
 interface FileNavProps {
@@ -57,7 +69,7 @@ export function FileNav({
           title="Show project"
           onClick={onToggle}
         >
-          ☰
+          <MenuIcon />
         </button>
       </aside>
     )
@@ -76,7 +88,7 @@ export function FileNav({
           title="Hide panel"
           onClick={onToggle}
         >
-          ‹
+          <ChevronLeftIcon />
         </button>
       </div>
 
@@ -104,7 +116,7 @@ export function FileNav({
           aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
         >
           <span className="filenav__theme-glyph" aria-hidden="true">
-            {theme === 'dark' ? '☀' : '☾'}
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </span>
           {theme === 'dark' ? 'Light theme' : 'Dark theme'}
         </button>
@@ -112,7 +124,7 @@ export function FileNav({
 
       <div className="filenav__tree">
         <div className="tree__root" title={folderName}>
-          <span aria-hidden="true">📁</span> {folderName}
+          <FolderIcon /> {folderName}
         </div>
         {loading ? (
           <p className="filenav__msg">Loading…</p>
@@ -139,7 +151,7 @@ export function FileNav({
                     title={expanded ? 'Collapse' : 'Expand'}
                     onClick={() => onToggleExpand(project.id)}
                   >
-                    {expanded ? '▾' : '▸'}
+                    {expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
                   </button>
                   <button
                     type="button"
@@ -147,7 +159,7 @@ export function FileNav({
                     title={project.name}
                     onClick={() => onSelectProject(project)}
                   >
-                    <span aria-hidden="true">📁</span> {project.name}
+                    <FolderIcon /> {project.name}
                   </button>
                 </div>
 
@@ -169,7 +181,7 @@ export function FileNav({
                             title={v.file.name}
                             onClick={() => onSelectVersion(project.id, v.file.id)}
                           >
-                            <span aria-hidden="true">📄</span> {v.label}
+                            <FileTextIcon /> {v.label}
                             {v.file.id === latestId ? ' (latest)' : ''}
                           </button>
                           <button
@@ -179,7 +191,7 @@ export function FileNav({
                             disabled={busy}
                             onClick={() => onDeleteVersion(project.id, v.file.id)}
                           >
-                            🗑
+                            <TrashIcon />
                           </button>
                         </div>
                       ))
@@ -194,7 +206,7 @@ export function FileNav({
                         aria-disabled="true"
                       >
                         <span className="tree__pdf">
-                          <span aria-hidden="true">📕</span> {p.label}
+                          <FilePdfIcon /> {p.label}
                         </span>
                         <span className="tree__pdf-tag">PDF</span>
                       </div>

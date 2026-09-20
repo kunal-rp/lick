@@ -289,3 +289,18 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+
+/* Twisties are inline SVG now — centre them in their box so the rotation
+   reads as a chevron turning rather than a glyph hopping. */
+.insights__chevron,
+.insights__entity-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.insights__chevron svg,
+.insights__entity-chevron svg {
+  width: 13px;
+  height: 13px;
+}

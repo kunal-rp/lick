@@ -648,3 +648,26 @@
     max-width: calc(100vw - 20px);
   }
 }
+
+/* Find bar: inline SVG icons, centred in their hit areas. */
+.toolbar__search-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-faint);
+}
+
+.toolbar__search-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.toolbar__search-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar__search-nav svg {
+  width: 14px;
+  height: 14px;
+}

@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { analyzeScript, type Reference, type Section } from '../fountain'
 import type { InsightsGroups } from '../layout'
+import { ChevronDownIcon, ChevronRightIcon } from './icons'
 import './InsightsPanel.css'
 
 interface InsightsPanelProps {
@@ -77,7 +78,9 @@ export function InsightsPanel({
         }}
         aria-expanded={!collapsed}
       >
-        <span className="insights__chevron">{collapsed ? '▸' : '▾'}</span>
+        <span className="insights__chevron">
+          {collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
+        </span>
         <span className="insights__title">Characters &amp; Locations</span>
         {collapsed && (
           <span className="insights__summary">
@@ -270,7 +273,9 @@ function SectionRow({
         onClick={onToggle}
         aria-expanded={open}
       >
-        <span className="insights__entity-chevron">{open ? '▾' : '▸'}</span>
+        <span className="insights__entity-chevron">
+          {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
+        </span>
         <span
           className="insights__section-swatch"
           style={{ background: section.color }}
@@ -347,7 +352,9 @@ function Entity({
         onClick={onToggle}
         aria-expanded={open}
       >
-        <span className="insights__entity-chevron">{open ? '▾' : '▸'}</span>
+        <span className="insights__entity-chevron">
+          {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
+        </span>
         <span className="insights__entity-name">{name}</span>
         <span className="insights__badges">{badges}</span>
       </button>
