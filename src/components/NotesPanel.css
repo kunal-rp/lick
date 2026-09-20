@@ -686,19 +686,24 @@
 }
 
 /*
- * Star. Sits on the row rather than appearing on hover, because there is no
- * hover on a phone and pinning is exactly the kind of thing done one-handed.
- * Faint until it's on, so a list of unstarred notes doesn't read as a column
- * of controls.
+ * Row actions — star and file. On the row rather than revealed on hover,
+ * because there is no hover on a phone and these are the sort of thing done
+ * one-handed while reading down the list. Faint until they're on, so a list of
+ * plain notes doesn't read as two columns of controls.
  */
 .notes__item {
   position: relative;
 }
 
-.notes__star {
+.notes__rowactions {
   position: absolute;
-  top: 8px;
+  top: 7px;
   right: 6px;
+  display: flex;
+  gap: 1px;
+}
+
+.notes__rowbtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -709,30 +714,30 @@
   border-radius: 4px;
   background: transparent;
   color: var(--text-faint);
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: pointer;
 }
 
-.notes__star svg {
+.notes__rowbtn svg {
   width: 15px;
   height: 15px;
 }
 
-.notes__star:hover {
+.notes__rowbtn:hover {
   opacity: 1;
   background: var(--hover);
   color: var(--text);
 }
 
-.notes__star--on,
-.notes__star--on:hover {
+.notes__rowbtn--on,
+.notes__rowbtn--on:hover {
   opacity: 1;
   color: var(--accent);
 }
 
-/* Keep the title clear of the star. */
+/* Keep the title clear of both buttons. */
 .notes__row-title {
-  padding-right: 28px;
+  padding-right: 58px;
 }
 
 /*
@@ -747,6 +752,12 @@
 
 .notes__row--inactive:hover {
   opacity: 0.75;
+}
+
+/* The row dims, but the control that undoes that has to stay legible —
+   otherwise the way back out is the hardest thing on screen to see. */
+.notes__item .notes__rowbtn--on {
+  opacity: 1;
 }
 
 /* A nav button showing an "on" state (starred, or filed away). */

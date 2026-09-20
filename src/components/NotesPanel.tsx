@@ -364,23 +364,43 @@ function NotesListView({
                       <span className="notes__row-preview">{preview}</span>
                     </span>
                   </button>
-                  {/* Starring from the list, so pinning something doesn't
-                      mean opening it first. Always rendered rather than
-                      shown on hover — there is no hover on a phone. */}
-                  <button
-                    type="button"
-                    className={`notes__star${
-                      note.starred ? ' notes__star--on' : ''
-                    }`}
-                    onClick={() =>
-                      onChangeNote(note.id, { starred: !note.starred })
-                    }
-                    aria-pressed={note.starred}
-                    aria-label={note.starred ? 'Unstar note' : 'Star note'}
-                    title={note.starred ? 'Unstar' : 'Star'}
-                  >
-                    <StarIcon filled={note.starred} />
-                  </button>
+                  {/* Both flags are reachable from the list, so filing or
+                      pinning something doesn't mean opening it first. Always
+                      rendered rather than shown on hover — there is no hover
+                      on a phone, and these are exactly the sort of thing done
+                      one-handed while reading down the list. */}
+                  <span className="notes__rowactions">
+                    <button
+                      type="button"
+                      className={`notes__rowbtn${
+                        note.starred ? ' notes__rowbtn--on' : ''
+                      }`}
+                      onClick={() =>
+                        onChangeNote(note.id, { starred: !note.starred })
+                      }
+                      aria-pressed={note.starred}
+                      aria-label={note.starred ? 'Unstar note' : 'Star note'}
+                      title={note.starred ? 'Unstar' : 'Star'}
+                    >
+                      <StarIcon filled={note.starred} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`notes__rowbtn${
+                        note.inactive ? ' notes__rowbtn--on' : ''
+                      }`}
+                      onClick={() =>
+                        onChangeNote(note.id, { inactive: !note.inactive })
+                      }
+                      aria-pressed={note.inactive}
+                      aria-label={
+                        note.inactive ? 'Mark note active' : 'Mark note inactive'
+                      }
+                      title={note.inactive ? 'Make active' : 'Make inactive'}
+                    >
+                      <ArchiveIcon />
+                    </button>
+                  </span>
                 </li>
               )
             })}
