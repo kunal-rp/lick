@@ -84,6 +84,21 @@ export interface Note {
   title: string
   /** Ordered body blocks (text paragraphs + inline media). */
   blocks: NoteBlock[]
+  /**
+   * Kept at the top of the list. For the handful of notes you keep coming
+   * back to while drafting — a character bible, a list of fixes — which
+   * otherwise sink as everything else is edited more recently than them.
+   */
+  starred: boolean
+  /**
+   * Done with, but not deleted. Hidden from the list until asked for.
+   *
+   * Notes accumulate faster than they stop being true: a research thread for
+   * a scene that's since been cut is worth keeping and not worth scrolling
+   * past. Deleting is the only other way to get it out of the way, and it's
+   * too final for something you might want to read again.
+   */
+  inactive: boolean
   /** Creation time (epoch ms). */
   createdAt: number
   /** Last-modified time (epoch ms); equals createdAt until first edit. */
@@ -133,6 +148,8 @@ export function makeNote(now: number): Note {
     id: makeId(now),
     title: '',
     blocks: [makeTextBlock(now)],
+    starred: false,
+    inactive: false,
     createdAt: now,
     modifiedAt: now,
   }
@@ -230,9 +247,17 @@ export function noteSnippet(note: Note): string {
   return ''
 }
 
-/** Notes ordered for display: most recently modified first. */
+/**
+ * Notes ordered for display: starred first, then most recently modified.
+ *
+ * Starring has to beat recency or it does nothing — the reason a note needs
+ * pinning is precisely that everything else keeps being edited after it.
+ */
 export function sortedNotes(notes: Note[]): Note[] {
-  return [...notes].sort((a, b) => b.modifiedAt - a.modifiedAt)
+  return [...notes].sort(
+    (a, b) =>
+      Number(b.starred) - Number(a.starred) || b.modifiedAt - a.modifiedAt,
+  )
 }
 
 interface NotesFile {
@@ -322,6 +347,10 @@ export function parseNotes(json: string): Note[] {
         id: n.id,
         title: typeof n.title === 'string' ? n.title : '',
         blocks,
+        // Absent on notes written before these existed: an old note is
+        // neither starred nor put away.
+        starred: n.starred === true,
+        inactive: n.inactive === true,
         createdAt,
         modifiedAt: typeof n.modifiedAt === 'number' ? n.modifiedAt : createdAt,
       })

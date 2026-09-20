@@ -57,8 +57,11 @@ interface NotesPanelProps {
   notes: Note[]
   /** Create a blank note and return it (so it can be opened immediately). */
   onCreate: () => Note
-  /** Persist an edit to a note's title/blocks. */
-  onChangeNote: (id: string, patch: Partial<Pick<Note, 'title' | 'blocks'>>) => void
+  /** Persist an edit to a note's title, body, or flags. */
+  onChangeNote: (
+    id: string,
+    patch: Partial<Pick<Note, 'title' | 'blocks' | 'starred' | 'inactive'>>,
+  ) => void
   onDeleteNote: (id: string) => void
   /** Upload image/video files to Drive and return blocks to splice into a note. */
   onUploadMedia: (files: File[]) => Promise<MediaBlock[]>
@@ -255,6 +258,7 @@ export function NotesPanel({
       notes={notes}
       onOpen={setOpenId}
       onCreate={createNote}
+      onChangeNote={onChangeNote}
       onClose={onClose}
       busy={busy}
     />
@@ -265,19 +269,24 @@ function NotesListView({
   notes,
   onOpen,
   onCreate,
+  onChangeNote,
   onClose,
   busy,
 }: {
   notes: Note[]
   onOpen: (id: string) => void
   onCreate: () => void
+  onChangeNote: NotesPanelProps['onChangeNote']
   onClose: () => void
   busy: boolean
 }) {
   const [query, setQuery] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
   const now = useMemo(() => Date.now(), [notes])
 
-  const ordered = useMemo(() => {
+  const searching = query.trim() !== ''
+
+  const matching = useMemo(() => {
     const list = sortedNotes(notes)
     const q = query.trim().toLowerCase()
     if (q === '') return list
@@ -286,6 +295,22 @@ function NotesListView({
         n.title.toLowerCase().includes(q) || noteText(n).toLowerCase().includes(q),
     )
   }, [notes, query])
+
+  // Search looks everywhere. Hiding a note you've explicitly gone looking for
+  // is the kind of help nobody wants — the row says it's inactive instead.
+  const ordered = useMemo(
+    () =>
+      searching || showInactive
+        ? matching
+        : matching.filter((n) => !n.inactive),
+    [matching, searching, showInactive],
+  )
+
+  const inactiveCount = useMemo(
+    () => notes.filter((n) => n.inactive).length,
+    [notes],
+  )
+  const activeCount = notes.length - inactiveCount
 
   return (
     <aside className="notes" role="region" aria-label="Project notes">
@@ -343,7 +368,9 @@ function NotesListView({
                 <li key={note.id} className="notes__item">
                   <button
                     type="button"
-                    className="notes__row"
+                    className={`notes__row${
+                      note.inactive ? ' notes__row--inactive' : ''
+                    }`}
                     onClick={() => onOpen(note.id)}
                   >
                     <span className="notes__row-title">{heading}</span>
@@ -354,19 +381,49 @@ function NotesListView({
                       <span className="notes__row-preview">{preview}</span>
                     </span>
                   </button>
+                  {/* Starring from the list, so pinning something doesn't
+                      mean opening it first. Always rendered rather than
+                      shown on hover — there is no hover on a phone. */}
+                  <button
+                    type="button"
+                    className={`notes__star${
+                      note.starred ? ' notes__star--on' : ''
+                    }`}
+                    onClick={() =>
+                      onChangeNote(note.id, { starred: !note.starred })
+                    }
+                    aria-pressed={note.starred}
+                    aria-label={note.starred ? 'Unstar note' : 'Star note'}
+                    title={note.starred ? 'Unstar' : 'Star'}
+                  >
+                    <StarIcon filled={note.starred} />
+                  </button>
                 </li>
               )
             })}
           </ul>
+        )}
+
+        {/* Inactive notes are out of the way, not out of reach: the count is
+            the whole affordance, and it only appears when there are any. */}
+        {!searching && inactiveCount > 0 && (
+          <button
+            type="button"
+            className="notes__inactive-toggle"
+            onClick={() => setShowInactive((v) => !v)}
+            aria-expanded={showInactive}
+          >
+            {showInactive ? 'Hide' : 'Show'} {inactiveCount} inactive
+          </button>
         )}
       </div>
 
       <div className="notes__bottombar">
         <span className="notes__bottombar-side" />
         <span className="notes__count">
-          {notes.length === 0
+          {activeCount === 0
             ? ''
-            : `${notes.length} ${notes.length === 1 ? 'Note' : 'Notes'}`}
+            : `${activeCount} ${activeCount === 1 ? 'Note' : 'Notes'}`}
         </span>
         <button
           type="button"
@@ -400,7 +457,7 @@ function NoteView({
 }: {
   note: Note
   onBack: () => void
-  onChangeNote: (id: string, patch: Partial<Pick<Note, 'title' | 'blocks'>>) => void
+  onChangeNote: NotesPanelProps['onChangeNote']
   onDelete: () => void
   onUploadMedia: (files: File[]) => Promise<MediaBlock[]>
   onDeleteMedia: (noteId: string, blockId: string) => void
@@ -671,6 +728,34 @@ function NoteView({
           <span>Notes</span>
         </button>
         <span className="notes__nav-spacer" />
+        <button
+          type="button"
+          className={`notes__nav-btn${
+            note.starred ? ' notes__nav-btn--on' : ''
+          }`}
+          onClick={() => onChangeNote(note.id, { starred: !note.starred })}
+          aria-pressed={note.starred}
+          aria-label={note.starred ? 'Unstar note' : 'Star note'}
+          title={note.starred ? 'Unstar' : 'Star — keep at the top of the list'}
+        >
+          <StarIcon filled={note.starred} />
+        </button>
+        <button
+          type="button"
+          className={`notes__nav-btn${
+            note.inactive ? ' notes__nav-btn--on' : ''
+          }`}
+          onClick={() => onChangeNote(note.id, { inactive: !note.inactive })}
+          aria-pressed={note.inactive}
+          aria-label={note.inactive ? 'Mark note active' : 'Mark note inactive'}
+          title={
+            note.inactive
+              ? 'Make active — show it in the list again'
+              : 'Make inactive — keep it, but out of the list'
+          }
+        >
+          <ArchiveIcon />
+        </button>
         <button
           type="button"
           className="notes__nav-btn notes__nav-btn--danger"
@@ -1149,6 +1234,29 @@ function UndoIcon() {
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 8h11a5 5 0 0 1 0 10h-6" />
       <path d="M7 4 3 8l4 4" />
+    </svg>
+  )
+}
+
+// A star, hollow or filled depending on whether the note is pinned.
+function StarIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true">
+      <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z" />
+    </svg>
+  )
+}
+
+// A tray, for putting a note away without deleting it.
+function ArchiveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 8h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+      <path d="M2 4h20v4H2z" />
+      <path d="M10 12h4" />
     </svg>
   )
 }

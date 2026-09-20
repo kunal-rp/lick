@@ -649,7 +649,10 @@ export default function App() {
   }
 
   // Edit a note's title and/or blocks, stamping the modified time.
-  function updateNote(id: string, patch: Partial<Pick<Note, 'title' | 'blocks'>>) {
+  function updateNote(
+    id: string,
+    patch: Partial<Pick<Note, 'title' | 'blocks' | 'starred' | 'inactive'>>,
+  ) {
     // Which blocks there are, versus what one of them says. Typing rewrites a
     // block's text and leaves the list alone; inserting or removing one
     // changes the list. Only the latter needs an undo entry — pushing one per
@@ -666,8 +669,14 @@ export default function App() {
         patch.blocks.length > before.blocks.length ? 'Undo insert' : 'Undo removal',
       )
     }
+    // Starring or filing a note isn't editing it. Stamping modifiedAt for a
+    // flag would reorder the list on a click that changed no words, and make
+    // "last edited" mean something it doesn't.
+    const edited = patch.title !== undefined || patch.blocks !== undefined
     const next = notesRef.current.map((n) =>
-      n.id === id ? { ...n, ...patch, modifiedAt: Date.now() } : n,
+      n.id === id
+        ? { ...n, ...patch, modifiedAt: edited ? Date.now() : n.modifiedAt }
+        : n,
     )
     mutateNotes(next)
   }

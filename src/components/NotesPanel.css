@@ -684,3 +684,82 @@
   outline-offset: -6px;
   background: var(--hover);
 }
+
+/*
+ * Star. Sits on the row rather than appearing on hover, because there is no
+ * hover on a phone and pinning is exactly the kind of thing done one-handed.
+ * Faint until it's on, so a list of unstarred notes doesn't read as a column
+ * of controls.
+ */
+.notes__item {
+  position: relative;
+}
+
+.notes__star {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  opacity: 0.45;
+  cursor: pointer;
+}
+
+.notes__star svg {
+  width: 15px;
+  height: 15px;
+}
+
+.notes__star:hover {
+  opacity: 1;
+  background: var(--hover);
+  color: var(--text);
+}
+
+.notes__star--on,
+.notes__star--on:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* Keep the title clear of the star. */
+.notes__row-title {
+  padding-right: 28px;
+}
+
+/* An inactive note still reads, just quieter — it's filed, not deleted. */
+.notes__row--inactive .notes__row-title,
+.notes__row--inactive .notes__row-preview {
+  opacity: 0.55;
+}
+
+.notes__inactive-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notes__inactive-toggle:hover {
+  color: var(--text);
+}
+
+/* A nav button showing an "on" state (starred, or filed away). */
+.notes__nav-btn--on {
+  color: var(--accent);
+}
