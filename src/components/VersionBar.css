@@ -58,21 +58,22 @@
   font-size: 13px;
 }
 
-.verbar__select {
+.verbar__draft {
   flex: 0 1 auto;
   min-width: 0;
-  padding: 3px 4px;
+  padding: 3px 7px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: var(--text);
   font-size: 13px;
   font-family: inherit;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.verbar__select:hover,
-.verbar__select:focus {
+.verbar__draft:hover,
+.verbar__draft:focus-visible {
   border-color: var(--border);
   background: var(--raised);
 }/*

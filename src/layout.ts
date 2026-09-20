@@ -15,7 +15,7 @@ const KEY = 'fountain-editor:layout'
  * while drafting, which makes it a companion to the script rather than a way
  * of getting around it — see {@link Companion}.
  */
-export type SidebarTab = 'files' | 'outline' | 'cast'
+export type SidebarTab = 'files' | 'drafts' | 'outline' | 'cast'
 
 /**
  * What sits beside the editor, or 'none' for a full-width editor.
@@ -115,6 +115,7 @@ export function loadLayout(): LayoutPrefs {
             : DEFAULTS.navCollapsed,
         sidebarTab:
           parsed.sidebarTab === 'files' ||
+          parsed.sidebarTab === 'drafts' ||
           parsed.sidebarTab === 'outline' ||
           parsed.sidebarTab === 'cast'
             ? parsed.sidebarTab

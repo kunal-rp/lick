@@ -13,8 +13,8 @@ import { InsightsPanel } from './components/InsightsPanel'
 import { FileNav } from './components/FileNav'
 import { Sidebar } from './components/Sidebar'
 import { OutlinePanel } from './components/OutlinePanel'
+import { DraftsPanel } from './components/DraftsPanel'
 import { VersionBar } from './components/VersionBar'
-import { HistoryPanel } from './components/HistoryPanel'
 import { NotesPanel } from './components/NotesPanel'
 import { CommandPalette, type Command } from './components/CommandPalette'
 import {
@@ -32,6 +32,7 @@ import {
 } from './drive/files'
 import {
   isHistoryFile,
+  listPdfs,
   isNotesFile,
   isPdf,
   nextVersionNumber,
@@ -131,7 +132,6 @@ export default function App() {
     Record<string, DriveFile[]>
   >({})
   const [treeLoading, setTreeLoading] = useState(false)
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
@@ -215,7 +215,6 @@ export default function App() {
   // its history.json. Captured as the user edits; browsable in the History
   // dialog, where any snapshot can be restored.
   const [history, setHistory] = useState<HistorySnapshot[]>([])
-  const [showHistory, setShowHistory] = useState(false)
   // Command palette visibility. Deliberately not persisted — it is a momentary
   // door, not a layout.
   const [showCommands, setShowCommands] = useState(false)
@@ -312,7 +311,6 @@ export default function App() {
         if (!active) return
         setProjects(list)
         setVersionsByProject(byProject)
-        setExpandedProjects(new Set(list.map((s) => s.id)))
 
         // Prefer the last-opened project/version if it still exists; otherwise
         // fall back to the first project's most recent version.
@@ -758,7 +756,6 @@ export default function App() {
   // Choose what sits beside the editor. The switch in the top bar and the
   // palette's View commands both come through here.
   const chooseCompanion = (next: Companion) => {
-    setShowHistory(false)
     setCompanion(next)
   }
   // ⇧⌘P swaps the pages in and out without disturbing a notes session: from
@@ -958,7 +955,6 @@ export default function App() {
   }
 
   function selectProject(project: DriveFile) {
-    setExpandedProjects((prev) => new Set(prev).add(project.id))
     const latest = parseVersions(versionsByProject[project.id] ?? [])[0]
     openVersion(project.id, latest?.file.id ?? null)
   }
@@ -967,14 +963,6 @@ export default function App() {
     openVersion(projectId, versionId)
   }
 
-  function toggleExpand(projectId: string) {
-    setExpandedProjects((prev) => {
-      const next = new Set(prev)
-      if (next.has(projectId)) next.delete(projectId)
-      else next.add(projectId)
-      return next
-    })
-  }
 
   function newProject() {
     if (folderId === null) return
@@ -986,7 +974,6 @@ export default function App() {
       const { projects: list, versionsByProject: byProject } = await loadTree(folderId)
       setProjects(list)
       setVersionsByProject(byProject)
-      setExpandedProjects((prev) => new Set(prev).add(created.id))
       setSelectedProjectId(created.id)
       setSelectedVersionId(
         parseVersions(byProject[created.id] ?? [])[0]?.file.id ?? null,
@@ -1090,14 +1077,6 @@ export default function App() {
       run: exportPdf,
     },
     {
-      id: 'history',
-      label: 'Edit history…',
-      group: 'Script',
-      keywords: 'revisions undo restore snapshots',
-      disabled: selectedVersionId === null,
-      run: () => setShowHistory(true),
-    },
-    {
       id: 'new-project',
       label: 'New project',
       group: 'Library',
@@ -1148,6 +1127,13 @@ export default function App() {
       group: 'Sidebar',
       keywords: 'projects drafts tree library',
       run: () => openSidebar('files'),
+    },
+    {
+      id: 'side-drafts',
+      label: 'Show drafts & history',
+      group: 'Sidebar',
+      keywords: 'versions revisions snapshots restore timeline',
+      run: () => openSidebar('drafts'),
     },
     {
       id: 'side-outline',
@@ -1236,18 +1222,33 @@ export default function App() {
           <FileNav
             folderName={folder.name}
             projects={projects}
-            versionsByProject={versionsByProject}
-            expandedProjects={expandedProjects}
             selectedProjectId={selectedProjectId}
-            selectedVersionId={selectedVersionId}
             loading={treeLoading}
             busy={busy}
-            onToggleExpand={toggleExpand}
             onSelectProject={selectProject}
-            onSelectVersion={selectVersion}
-            onDeleteVersion={deleteVersion}
             onNewProject={newProject}
             onChangeFolder={() => choose()}
+          />
+        ) : sidebarTab === 'drafts' ? (
+          <DraftsPanel
+            drafts={versions}
+            pdfs={listPdfs(versionsByProject[selectedProjectId ?? ''] ?? [])}
+            selectedVersionId={selectedVersionId}
+            snapshots={
+              selectedVersionId === null
+                ? []
+                : snapshotsForVersion(history, selectedVersionId)
+            }
+            currentText={source}
+            busy={busy}
+            onSelectDraft={(id) =>
+              selectedProjectId !== null && selectVersion(selectedProjectId, id)
+            }
+            onNewDraft={newVersion}
+            onDeleteDraft={(id) =>
+              selectedProjectId !== null && deleteVersion(selectedProjectId, id)
+            }
+            onRestore={restoreSnapshot}
           />
         ) : sidebarTab === 'outline' ? (
           <OutlinePanel
@@ -1320,14 +1321,14 @@ export default function App() {
           <>
             <VersionBar
               projectName={selectedProject?.name ?? ''}
-              versions={versions}
-              selectedVersionId={selectedVersionId}
+              draftLabel={
+                versions.find((v) => v.file.id === selectedVersionId)?.label ??
+                'draft'
+              }
+              onOpenDrafts={() => openSidebar('drafts')}
               dirty={dirty}
               saving={saveState === 'saving'}
               savedAt={savedAt}
-              onSelectVersion={(id) =>
-                selectedProjectId !== null && selectVersion(selectedProjectId, id)
-              }
               onSave={() => void persist()}
               onToggleNav={() => setNavCollapsed(false)}
               companion={companion}
@@ -1470,15 +1471,6 @@ export default function App() {
                   />
                 )
               })()}
-              {showHistory && (
-                <HistoryPanel
-                  snapshots={snapshotsForVersion(history, selectedVersionId)}
-                  currentText={source}
-                  onRestore={restoreSnapshot}
-                  onClose={() => setShowHistory(false)}
-                  busy={busy}
-                />
-              )}
             </div>
           </>
         )}

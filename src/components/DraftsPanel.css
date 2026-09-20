@@ -1,0 +1,355 @@
+/*
+ * Drafts: every version of the open script, plus the automatic snapshots taken
+ * within the one you're in.
+ *
+ * The snapshot rows and diff below are the old Edit-history dialog's, rebased
+ * into the sidebar — same reading, no longer covering the script to do it.
+ */
+.drafts {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 12px;
+  user-select: none;
+}
+
+.drafts__actions {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+}
+
+.drafts__new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--raised);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.drafts__new svg {
+  width: 13px;
+  height: 13px;
+}
+
+.drafts__new:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.drafts__new:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.drafts__empty,
+.drafts__nohistory {
+  margin: 0;
+  padding: 10px 14px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.drafts__list {
+  margin: 0;
+  padding: 0 6px;
+  list-style: none;
+}
+
+.drafts__row {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.drafts__row:hover {
+  background: var(--hover);
+}
+
+/* The draft you're in. A left rule rather than a fill: the snapshots nested
+   under it already carry the emphasis, and a filled row would fight them. */
+.drafts__row.is-open {
+  background: var(--selected);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.drafts__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.drafts__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drafts__tag {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.drafts__delete {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.drafts__delete svg {
+  width: 13px;
+  height: 13px;
+}
+
+.drafts__delete:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.drafts__delete:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Indented under its draft, with a rule tying the snapshots to it. */
+.drafts__history {
+  margin: 2px 0 6px 10px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+
+.snap {
+  border-radius: 4px;
+}
+
+.drafts__exports {
+  margin-top: 10px;
+  padding: 8px 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.drafts__exports-head {
+  padding-bottom: 4px;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.drafts__pdf {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.drafts__pdf svg {
+  width: 13px;
+  height: 13px;
+  color: var(--text-faint);
+}
+
+.drafts__pdf-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Restore, styled as the affirmative action it is. */
+.snap__restore {
+  margin: 8px 0 4px;
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.snap__restore:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.snap__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.snap__row:hover {
+  background: var(--hover);
+}
+
+.snap__chevron {
+  flex: 0 0 auto;
+  width: 10px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.snap__badge {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.snap__badge--restore {
+  background: rgba(160, 100, 58, 0.18);
+  color: var(--accent);
+}
+
+.snap__when {
+  flex: 1 1 auto;
+  color: var(--text-muted);
+}
+
+.snap__delta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.snap__current {
+  color: var(--text-faint);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.snap__add {
+  color: #3f9d54;
+}
+
+.snap__del {
+  color: #c0553f;
+}
+
+.snap__detail {
+  padding: 4px 12px 12px 30px;
+}
+
+.snap__nochange {
+  margin: 4px 0 10px;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-style: italic;
+}/* Line diff of the snapshot against the current text. */
+
+.snap__diff {
+  max-height: 260px;
+  overflow: auto;
+  margin: 4px 0 10px;
+  padding: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.snap__diff-line {
+  display: flex;
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.snap__diff-gutter {
+  flex: 0 0 auto;
+  width: 10px;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.snap__diff-line--add {
+  background: rgba(63, 157, 84, 0.14);
+}
+
+.snap__diff-line--add .snap__diff-gutter {
+  color: #3f9d54;
+}
+
+.snap__diff-line--del {
+  background: rgba(192, 85, 63, 0.14);
+}
+
+.snap__diff-line--del .snap__diff-gutter {
+  color: #c0553f;
+}
+
+.snap__diff-line--ctx {
+  color: var(--text-muted);
+}/* Stands in for a collapsed run of unchanged lines. */
+
+.snap__diff-gap {
+  padding: 2px 8px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-style: italic;
+  text-align: center;
+  user-select: none;
+}
+
+.snap__diff-gap + .snap__diff-gap {
+  display: none;
+}
+
+.snap__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.snap__chevron svg {
+  width: 13px;
+  height: 13px;
+}

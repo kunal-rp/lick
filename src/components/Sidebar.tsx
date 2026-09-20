@@ -4,6 +4,7 @@ import type { Theme } from '../theme'
 import {
   ChevronLeftIcon,
   FolderIcon,
+  LayersIcon,
   MoonIcon,
   OutlineIcon,
   SunIcon,
@@ -24,13 +25,14 @@ interface SidebarProps {
 
 const TABS: { key: SidebarTab; label: string; icon: JSX.Element }[] = [
   { key: 'files', label: 'Files', icon: <FolderIcon /> },
+  { key: 'drafts', label: 'Drafts', icon: <LayersIcon /> },
   { key: 'outline', label: 'Outline', icon: <OutlineIcon /> },
   { key: 'cast', label: 'Cast', icon: <UsersIcon /> },
 ]
 
 /**
- * The left-hand navigation surface: files, outline and cast as tabs of one
- * panel — the three ways of getting somewhere in a script.
+ * The left-hand navigation surface: files, drafts, outline and cast as tabs of
+ * one panel — the ways of getting somewhere in a script.
  *
  * These used to be two unrelated places. The file tree owned the left edge,
  * and Characters & Locations — the only jump-to-line surface in the app — was

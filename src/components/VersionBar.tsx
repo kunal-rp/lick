@@ -1,4 +1,3 @@
-import type { Version } from '../drive/versions'
 import { ViewSwitch, type ViewOption } from './ViewSwitch'
 import type { Companion } from '../layout'
 import { CommandIcon, MenuIcon, NoteIcon, PagesIcon, PenIcon } from './icons'
@@ -8,13 +7,14 @@ import './VersionBar.css'
 
 interface VersionBarProps {
   projectName: string
-  versions: Version[]
-  selectedVersionId: string | null
+  /** Label of the open draft, e.g. "v3". */
+  draftLabel: string
+  /** Open the Drafts panel — switching draft is that surface's job now. */
+  onOpenDrafts: () => void
   dirty: boolean
   saving: boolean
   /** Timestamp (ms) of the last successful save this session, or null. */
   savedAt: number | null
-  onSelectVersion: (fileId: string) => void
   onSave: () => void
   /** Open the project drawer (mobile only; the button is hidden on desktop). */
   onToggleNav: () => void
@@ -61,12 +61,11 @@ const COMPANIONS: ViewOption<Companion>[] = [
  */
 export function VersionBar({
   projectName,
-  versions,
-  selectedVersionId,
+  draftLabel,
+  onOpenDrafts,
   dirty,
   saving,
   savedAt,
-  onSelectVersion,
   onSave,
   onToggleNav,
   companion,
@@ -80,9 +79,6 @@ export function VersionBar({
           minute: '2-digit',
         })
       : null
-
-  // versions[] is most-recent-first, so index 0 is the latest.
-  const latestId = versions.length > 0 ? versions[0].file.id : null
 
   // One slot rather than a button plus a timestamp beside it: the three states
   // are mutually exclusive, so they belong in one place.
@@ -108,19 +104,20 @@ export function VersionBar({
         <span className="verbar__sep" aria-hidden="true">
           /
         </span>
-        <select
-          className="verbar__select"
-          value={selectedVersionId ?? ''}
-          aria-label="Draft"
-          onChange={(e) => onSelectVersion(e.target.value)}
+        {/*
+          A breadcrumb, not a picker. Switching draft used to be a <select>
+          here, which made "which draft" a top-bar form field while its
+          history lived in a dialog somewhere else entirely. Both are the
+          Drafts panel's now, so this just says where you are and opens it.
+        */}
+        <button
+          type="button"
+          className="verbar__draft"
+          onClick={onOpenDrafts}
+          title="Drafts & history"
         >
-          {versions.map((v) => (
-            <option key={v.file.id} value={v.file.id}>
-              {v.label}
-              {v.file.id === latestId ? ' (latest)' : ''}
-            </option>
-          ))}
-        </select>
+          {draftLabel}
+        </button>
       </div>
 
       {/* Clickable only when there's something to save; otherwise it's a
