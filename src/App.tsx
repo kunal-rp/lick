@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Editor } from './components/Editor'
 import { Preview } from './components/Preview'
 import { InsightsPanel } from './components/InsightsPanel'
-import { SplitPane } from './components/SplitPane'
 import { FileNav } from './components/FileNav'
 import { Sidebar } from './components/Sidebar'
 import { OutlinePanel } from './components/OutlinePanel'
@@ -82,6 +81,8 @@ const MOD_KEY =
     ? '\u2318'
     : 'Ctrl+'
 
+const SHIFT_MOD = MOD_KEY === '\u2318' ? '\u21e7\u2318' : 'Ctrl+Shift+'
+
 // Background auto-save: persist after the user pauses, or after enough edits,
 // or if too long has passed since the last save while typing continuously.
 const AUTOSAVE_IDLE_MS = 1500
@@ -148,19 +149,13 @@ export default function App() {
   // Light/dark theme, applied to <html> as data-theme and persisted.
   const [theme, setTheme] = useState<Theme>(loadTheme)
 
-  // The workspace is a sidebar, an editor, and optionally the pages beside it.
-  // `sidebarTab` says which reference panel the sidebar shows; `showPreview`
-  // says whether the pages are up. `zoomed` temporarily gives one side the
-  // whole window: 'right' for a full-window read, 'left' for writing.
-  //
-  // `zoomed` is deliberately NOT persisted: a maximized pane is a posture you
-  // adopt for a few minutes, not a layout you want to find again after a
-  // reload. The other two are.
+  // The workspace is a sidebar plus one view. `sidebarTab` says which
+  // reference panel the sidebar shows; `showPreview` says whether that view is
+  // the pages rather than the editor. Two values, the same at every width.
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(
     layoutRef.current.sidebarTab,
   )
   const [showPreview, setShowPreview] = useState(layoutRef.current.showPreview)
-  const [zoomed, setZoomed] = useState<'left' | 'right' | null>(null)
 
   // Whether section ranges are rendered over the preview pages (toolbar toggle).
   const [showSections, setShowSections] = useState(layoutRef.current.showSections)
@@ -233,6 +228,8 @@ export default function App() {
   )
   // Latest persist() so the ⌘/Ctrl+S handler always calls the current closure.
   const persistRef = useRef<() => void>(() => {})
+  // Same, for the ⇧⌘P preview toggle.
+  const previewRef = useRef<() => void>(() => {})
 
   const savingRef = useRef(false)
   const changeCountRef = useRef(0)
@@ -356,14 +353,11 @@ export default function App() {
     saveLayout(layoutRef.current)
   }, [navCollapsed, sidebarTab, showPreview, showSections])
 
-  // Entering mobile width, collapse the nav to its floating button so the
-  // editor fills the screen; the drawer is a tap away. Widening back to desktop
-  // drops any zoom: mobile expresses its single-view navigation *through*
-  // `zoomed` (see mobileView below), so without this you'd arrive on desktop
-  // with whatever the phone was last showing maximized over everything else.
+  // Entering mobile width, collapse the sidebar to its rail so the editor fills
+  // the screen; the drawer is a tap away. Nothing to undo going the other way —
+  // both densities now describe their layout with the same two values.
   useEffect(() => {
     if (isMobile) setNavCollapsed(true)
-    else setZoomed(null)
   }, [isMobile])
 
   // Track the selected version for the async-save guard.
@@ -387,6 +381,7 @@ export default function App() {
   // ⌘/Ctrl+S saves the editor's current text to the open version.
   useEffect(() => {
     persistRef.current = () => void persist()
+    previewRef.current = togglePreview
   })
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -400,6 +395,12 @@ export default function App() {
         // a trap you have to find Escape to get out of.
         e.preventDefault()
         setShowCommands((open) => !open)
+      } else if (e.shiftKey && key === 'p') {
+        // ⇧⌘P steps into the pages and back out — Slugline's shortcut for the
+        // same move, and the reason the preview no longer needs to live on
+        // screen permanently.
+        e.preventDefault()
+        previewRef.current()
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -705,34 +706,14 @@ export default function App() {
     return URL.createObjectURL(blob)
   }, [])
 
-  // Desktop: show or hide the pages beside the editor. Toggling them off also
-  // drops a zoom, so the control can't leave the workspace in a state where
-  // nothing is expanded but `zoomed` still says something is.
-  const togglePreview = () => {
+  // Step into the pages, or back out to the script. One control, one value,
+  // identical on a phone and a monitor — the view switcher in the top bar and
+  // the palette's View commands all come through here.
+  const setView = (view: 'editor' | 'preview') => {
     setShowHistory(false)
-    setShowPreview((on) => {
-      if (on) setZoomed(null)
-      return !on
-    })
+    setShowPreview(view === 'preview')
   }
-  const toggleZoom = () => setZoomed((z) => (z === 'right' ? null : 'right'))
-
-  // Mobile is the same layout model, permanently maximized: one pane fills the
-  // screen. Deriving the view from `showPreview`/`zoomed` rather than keeping a
-  // parallel mobile state is what keeps the two from disagreeing when the
-  // window is resized. Notes is not here — it lives in the sidebar drawer.
-  type MobileView = 'editor' | 'preview'
-  const mobileView: MobileView =
-    zoomed === 'right' && showPreview ? 'preview' : 'editor'
-  const setMobileView = (view: MobileView) => {
-    setShowHistory(false)
-    if (view === 'editor') {
-      setZoomed('left')
-    } else {
-      setShowPreview(true)
-      setZoomed('right')
-    }
-  }
+  const togglePreview = () => setView(showPreview ? 'editor' : 'preview')
 
   // Open the sidebar on a given tab — what the palette's "Show notes" and
   // "Show outline" commands do, and what the collapsed rail's buttons do.
@@ -1122,21 +1103,16 @@ export default function App() {
       label: 'Show editor only',
       group: 'View',
       keywords: 'write full screen distraction free',
-      run: () => (isMobile ? setMobileView('editor') : setZoomed('left')),
+      hint: SHIFT_MOD + 'P',
+      run: () => setView('editor'),
     },
     {
       id: 'view-preview',
       label: 'Show preview',
       group: 'View',
-      keywords: 'pages render script',
-      run: () => {
-        if (isMobile) {
-          setMobileView('preview')
-        } else {
-          setShowPreview(true)
-          setZoomed(null)
-        }
-      },
+      keywords: 'pages render script pagination print',
+      hint: SHIFT_MOD + 'P',
+      run: () => setView('preview'),
     },
     {
       id: 'fit-preview',
@@ -1352,12 +1328,8 @@ export default function App() {
               }
               onSave={() => void persist()}
               onToggleNav={() => setNavCollapsed(false)}
-              showPreview={showPreview}
-              onTogglePreview={togglePreview}
-              zoomed={zoomed === 'right'}
-              onToggleZoom={toggleZoom}
-              mobileView={mobileView}
-              onSetView={setMobileView}
+              view={showPreview ? 'preview' : 'editor'}
+              onSetView={setView}
               onOpenCommands={() => setShowCommands(true)}
             />
             <div className="workspace__editor">
@@ -1410,34 +1382,47 @@ export default function App() {
                     onDeleteComment={deleteComment}
                   />
                 )
-                // The right pane holds the pages and nothing else now. Notes
-                // and Characters & Locations moved to the sidebar, where they
-                // sit beside the files instead of taking turns with the
-                // preview for the same half of the window.
-                const rightNode = showPreview ? previewNode : null
-
-                // Mobile shows exactly one pane, always — the segmented
-                // control drives `showPreview`/`zoomed`, so the same two values
-                // describe both densities and can't drift apart.
-                if (isMobile) {
-                  return zoomed === 'right' && rightNode !== null
-                    ? rightNode
-                    : editorNode
-                }
-
-                // Desktop: the split, unless one side has the window to itself.
-                if (rightNode === null || zoomed === 'left') return editorNode
-                if (zoomed === 'right') return rightNode
+                // One view fills the workspace: the editor, or the pages.
+                //
+                // The split is gone. It existed to show a rendered copy beside
+                // raw markup, and the editor renders itself now — so the second
+                // half was spending a monitor's worth of width on the same
+                // words twice. Preview is a mode you step into to check
+                // pagination and step back out of, which is what Highland,
+                // Slugline and Beat all do. Phones and desktops finally
+                // describe their layout with the same single value.
+                //
+                // The editor stays mounted underneath rather than being
+                // swapped out, so stepping into the preview and back keeps the
+                // undo stack, the caret and the scroll position — unmounting it
+                // threw all three away.
+                //
+                // Both stay mounted, with the inactive one hidden but still
+                // laid out (see .workspace__view--hidden). That is not an
+                // optimisation — it's required in both directions. The editor
+                // keeps its undo stack, caret and scroll position across a
+                // trip to the pages; and the *preview* is what paginates the
+                // script, so the page-break guides drawn in the editor go
+                // stale the moment it stops rendering. `display: none` would
+                // break it either way, since a box with no layout measures as
+                // zero.
                 return (
-                  <SplitPane
-                    left={editorNode}
-                    initialLeftPercent={layoutRef.current.splitLeftPercent}
-                    onResize={(pct) => {
-                      layoutRef.current.splitLeftPercent = pct
-                      saveLayout(layoutRef.current)
-                    }}
-                    right={rightNode}
-                  />
+                  <>
+                    <div
+                      className={`workspace__view${
+                        showPreview ? ' workspace__view--hidden' : ''
+                      }`}
+                    >
+                      {editorNode}
+                    </div>
+                    <div
+                      className={`workspace__view${
+                        showPreview ? '' : ' workspace__view--hidden'
+                      }`}
+                    >
+                      {previewNode}
+                    </div>
+                  </>
                 )
               })()}
               {showHistory && (

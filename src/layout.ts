@@ -22,10 +22,8 @@ export interface LayoutPrefs {
   navCollapsed: boolean
   /** Which sidebar panel is showing. */
   sidebarTab: SidebarTab
-  /** Whether the preview pane sits beside the editor. */
+  /** Whether the preview is showing instead of the editor. */
   showPreview: boolean
-  /** Editor pane width as a percentage of the split (0–100). */
-  splitLeftPercent: number
   /** Which groups the Characters & Locations panel displays. */
   insightsGroups: InsightsGroups
   /** Whether section ranges are rendered over the preview pages. */
@@ -49,8 +47,9 @@ const DEFAULT_GROUPS: InsightsGroups = {
 const DEFAULTS: LayoutPrefs = {
   navCollapsed: false,
   sidebarTab: 'files',
-  showPreview: true,
-  splitLeftPercent: 50,
+  // The editor formats in place now, so the pages are something you go and
+  // check rather than something you keep open beside the text.
+  showPreview: false,
   insightsGroups: { ...DEFAULT_GROUPS },
   showSections: false,
 }
@@ -78,12 +77,13 @@ function migrateSidebarTab(legacy: LegacyPrefs): SidebarTab {
   return DEFAULTS.sidebarTab
 }
 
-function migratePreview(legacy: LegacyPrefs): boolean {
-  if (legacy.rightTab === 'preview') return true
-  if (legacy.rightTab === null) return false
-  // v1: Notes drew over the preview, so showPreview still says what the right
-  // pane held underneath it.
-  if (typeof legacy.showPreview === 'boolean') return legacy.showPreview
+/**
+ * The preview is a mode now, not a pane, so a stored "the preview pane was
+ * open" doesn't translate — it described a split that no longer exists, and
+ * restoring it would drop the writer into the pages instead of their script.
+ * Everyone starts in the editor.
+ */
+function migratePreview(): boolean {
   return DEFAULTS.showPreview
 }
 
@@ -107,11 +107,7 @@ export function loadLayout(): LayoutPrefs {
         showPreview:
           typeof parsed.showPreview === 'boolean' && parsed.rightTab === undefined
             ? parsed.showPreview
-            : migratePreview(parsed),
-        splitLeftPercent:
-          typeof parsed.splitLeftPercent === 'number'
-            ? Math.min(80, Math.max(20, parsed.splitLeftPercent))
-            : DEFAULTS.splitLeftPercent,
+            : migratePreview(),
         insightsGroups: {
           characters:
             typeof parsed.insightsGroups?.characters === 'boolean'
