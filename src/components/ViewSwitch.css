@@ -67,7 +67,6 @@
   .viewswitch {
     flex: 1 1 auto;
     min-width: 0;
-    max-width: 280px;
   }
 
   .viewswitch__seg {
@@ -77,9 +76,10 @@
     padding: 0 6px;
   }
 
-  /* Below ~360px three labelled segments stop fitting beside the rest of the
-     bar; drop to icons, which stay unambiguous because each is distinct. */
-  @media (max-width: 400px) {
+  /* Only on the genuinely narrow (iPhone SE portrait and below) do three
+     labelled segments stop fitting; there, fall back to icons, which stay
+     unambiguous because each is distinct. */
+  @media (max-width: 340px) {
     .viewswitch__label {
       display: none;
     }

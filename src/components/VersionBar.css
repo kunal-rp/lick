@@ -8,9 +8,8 @@
   background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
   user-select: none;
-}
+}/* Inline project-drawer toggle, shown only on mobile (see media query). */
 
-/* Inline project-drawer toggle, shown only on mobile (see media query). */
 .verbar__nav {
   display: none;
   flex: 0 0 auto;
@@ -29,11 +28,22 @@
 
 .verbar__nav:hover {
   background: var(--hover);
+}/*
+ * Identity: "Project / Draft" as one breadcrumb, so the two read as a path to
+ * the thing you're editing rather than as two unrelated controls that happen to
+ * sit next to each other.
+ */
+
+.verbar__identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .verbar__project {
   min-width: 0;
-  max-width: 40%;
+  max-width: 32ch;
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
@@ -42,86 +52,122 @@
   text-overflow: ellipsis;
 }
 
-.verbar__version {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.verbar__label {
-  font-size: 12px;
-  color: var(--text-muted);
+.verbar__sep {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: 13px;
 }
 
 .verbar__select {
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--raised);
-  color: var(--text);
-  font-size: 12px;
-  font-family: inherit;
-}
-
-.verbar__spacer {
-  flex: 1 1 auto;
-}
-
-.verbar__saved-at {
-  flex: 0 0 auto;
-  font-size: 12px;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.verbar__btn {
-  flex: 0 0 auto;
-  padding: 5px 12px;
-  border: 1px solid var(--border);
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 3px 4px;
+  border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.1s ease, color 0.1s ease;
 }
 
-.verbar__btn:hover:not(:disabled) {
+.verbar__select:hover,
+.verbar__select:focus {
+  border-color: var(--border);
+  background: var(--raised);
+}/*
+ * Save status. One slot for three mutually exclusive states, with a dot
+ * carrying the state at a glance and the word confirming it — the bar used to
+ * spend a button *and* a separate "Last saved 4:12" on this, which is two
+ * controls for one fact.
+ */
+
+.verbar__status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: default;
+}
+
+.verbar__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.verbar__status--clean {
+  color: var(--text-faint);
+}
+
+.verbar__status--dirty {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.verbar__status--dirty:hover {
+  border-color: var(--border);
+  background: var(--hover);
+}
+
+.verbar__status--saving {
+  color: var(--text-muted);
+}/* Disabled here means "nothing to save", which is a good state — it must not
+   read as a broken control, so it keeps full contrast. */
+
+.verbar__status:disabled {
+  opacity: 1;
+}/* The ⌘K door. Sized like the other icon buttons but carrying its own key cap
+   so the shortcut is discoverable without a tooltip. */
+
+.verbar__commands {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.verbar__commands:hover {
   background: var(--hover);
   color: var(--text);
 }
 
-.verbar__btn:disabled {
-  opacity: 0.5;
-  cursor: default;
+.verbar__commands svg {
+  width: 14px;
+  height: 14px;
 }
 
-.verbar__btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
+.verbar__commands-key {
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 
-.verbar__btn--primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-/* A plain button showing an "on" state (History, while its dialog is open). */
-.verbar__btn--pressed {
-  background: var(--selected);
-  border-color: var(--accent);
-}
-
-/*
+.verbar__spacer {
+  flex: 1 1 auto;
+}/*
  * Desktop view controls: which panel occupies the right pane, plus expand.
  * Grouped into one segmented cluster so they read as a single choice about the
  * workspace, distinct from the document actions (Save / Export / New version)
  * further right. Mobile hides this in favour of the view-cycle control.
  */
+
 .verbar__views {
   flex: 0 0 auto;
   display: inline-flex;
@@ -164,20 +210,18 @@
 .verbar__view-btn:disabled {
   opacity: 0.4;
   cursor: default;
-}
-
-/* The expand toggle is a glyph-only affordance; separate it from the two named
+}/* The expand toggle is a glyph-only affordance; separate it from the two named
    tabs so it doesn't read as a third destination. */
+
 .verbar__view-btn--zoom {
   margin-left: 2px;
   padding: 3px 7px;
   border-left: 1px solid var(--border);
   border-radius: 0 4px 4px 0;
   font-size: 13px;
-}
-
-/* Segmented view control (mobile only) — on desktop the view controls above
+}/* Segmented view control (mobile only) — on desktop the view controls above
    do this job. */
+
 .verbar__viewswitch {
   display: none;
   flex: 1 1 auto;
@@ -185,74 +229,12 @@
   justify-content: flex-end;
 }
 
-.verbar__popup--left {
-  right: auto;
-  left: 0;
-}
-
-.verbar__popup-item--active {
-  background: var(--selected);
-}
-
-.verbar__popup-divider {
-  height: 1px;
-  margin: 4px 6px;
-  background: var(--border);
-}
-
-/* Options menu (mobile only) — hidden on desktop, where the actions are inline. */
-.verbar__menu {
-  position: relative;
-  display: none;
-}
-
-.verbar__options {
-  font-size: 16px;
-  line-height: 1;
-  padding: 5px 10px;
-}
-
-.verbar__popup {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 50;
-  min-width: 168px;
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-  background: var(--panel-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-}
-
-.verbar__popup-item {
-  padding: 10px 12px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.verbar__popup-item:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.verbar__popup-item:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 /*
  * Mobile: the drawer toggle sits inline at the bar's left, and everything fits
- * on a single row — the project name truncates and the less-used actions move
- * into the options (⋯) menu.
+ * on a single row — identity shrinks to the draft name and the save state
+ * shrinks to its dot, leaving the segmented control the width it needs.
  */
+
 @media (max-width: 768px) {
   .verbar {
     height: 44px;
@@ -265,68 +247,55 @@
     display: inline-flex;
   }
 
-  /* Truncate the project name so the row never wraps or overflows. */
-  .verbar__project {
-    flex: 0 1 auto;
-    min-width: 0;
-  }
-
-  /* Supplementary, and the button already reflects the state — hide to save room. */
-  .verbar__saved-at {
+  /*
+   * The segmented control is the primary navigation at this width, and three
+   * labelled segments need ~216px of a 375px row — the commonest phone. So
+   * identity gives up the row entirely: the drawer already lists the drafts
+   * with the open one selected, and the project name is in the document title.
+   * Labelled destinations are the whole point of the control; an icon-only
+   * fallback to keep a <select> here would be trading the goal for the garnish.
+   */
+  .verbar__identity {
     display: none;
   }
 
-  /* The select alone reads clearly; drop the "Version" label to save room. */
-  .verbar__label {
+  /* The dot alone carries the save state; the word is the first thing to go
+     when the row gets tight. */
+  .verbar__status-text {
     display: none;
   }
 
-  /* Export PDF, New version and History live in the options menu on mobile. */
-  .verbar__btn--inline-action {
-    display: none;
+  .verbar__status {
+    padding: 4px 6px;
   }
 
-  /* Superseded by the view-cycle control at the bar's right edge. */
+  /* Superseded by the segmented control at the bar's right edge. */
   .verbar__views {
     display: none;
-  }
-
-  .verbar__menu {
-    display: block;
   }
 
   .verbar__viewswitch {
     display: flex;
   }
-}
 
-/* Icon buttons in the bar: centre the SVG in its hit area rather than letting
+  /* ⌘K has no keyboard to be pressed from; the icon alone opens the palette,
+     which is still worth having as a searchable index of every command. */
+  .verbar__commands-key {
+    display: none;
+  }
+
+  .verbar__commands {
+    padding: 0 8px;
+  }
+}/* Icon buttons in the bar: centre the SVG in its hit area rather than letting
    it sit on the (now absent) text baseline. */
-.verbar__nav,
-.verbar__options {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 
 .verbar__nav svg {
   width: 17px;
   height: 17px;
 }
 
-.verbar__options svg {
-  width: 16px;
-  height: 16px;
-}
-
-.verbar__view-btn svg,
-.verbar__popup-item svg {
+.verbar__view-btn svg {
   width: 14px;
   height: 14px;
-}
-
-.verbar__popup-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }

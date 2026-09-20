@@ -1,13 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
 import type { Version } from '../drive/versions'
 import type { RightTab } from '../layout'
 import { ViewSwitch, type ViewOption } from './ViewSwitch'
 import {
-  CheckIcon,
   CollapseIcon,
+  CommandIcon,
   ExpandIcon,
   MenuIcon,
-  MoreIcon,
   NoteIcon,
   PagesIcon,
   PenIcon,
@@ -20,15 +18,12 @@ interface VersionBarProps {
   projectName: string
   versions: Version[]
   selectedVersionId: string | null
-  busy: boolean
   dirty: boolean
   saving: boolean
   /** Timestamp (ms) of the last successful save this session, or null. */
   savedAt: number | null
   onSelectVersion: (fileId: string) => void
   onSave: () => void
-  onNewVersion: () => void
-  onExportPdf: () => void
   /** Open the project drawer (mobile only; the button is hidden on desktop). */
   onToggleNav: () => void
   /** What the right pane shows, or null when the editor fills the workspace. */
@@ -38,19 +33,12 @@ interface VersionBarProps {
   /** Whether the right pane is expanded over the editor. */
   zoomed: boolean
   onToggleZoom: () => void
-  /** Open the edit-history dialog (version-scoped, hence its home here). */
-  onOpenHistory: () => void
-  historyOpen: boolean
   /** Current mobile view; drives the segmented control (mobile only). */
   mobileView: MobileView
   /** Switch to a view (mobile only). */
   onSetView: (view: MobileView) => void
-  /** Re-fit the preview page to the pane (mobile options menu). */
-  onFit: () => void
-  /** Whether the script defines any sections (shows the Sections toggle). */
-  sectionsAvailable: boolean
-  showSections: boolean
-  onToggleSections: () => void
+  /** Open the command palette — everything not in this bar lives there. */
+  onOpenCommands: () => void
 }
 
 // Desktop view switcher: the right pane's two occupants, as peers.
@@ -67,56 +55,40 @@ const VIEWS: ViewOption<MobileView>[] = [
   { key: 'notes', icon: <NoteIcon />, label: 'Notes' },
 ]
 
-/** Top bar over the editor: current project, version selector, save/new version. */
+/**
+ * The workspace's top bar.
+ *
+ * Deliberately short. It used to carry four unrelated classes of control in one
+ * flat row — what you're editing, whether it's saved, what the panes are doing,
+ * and half a dozen document operations — with "New version" in the accent
+ * colour, making the app's rarest action its loudest. Everything in that last
+ * class now lives in the command palette (⌘K), leaving three things here:
+ *
+ *   identity  — which script and draft you're in
+ *   status    — whether your words are safe
+ *   view      — what the workspace is showing
+ *
+ * plus the door to everything else. The save control stays because it answers a
+ * question a writer asks constantly and can't afford to go looking for.
+ */
 export function VersionBar({
   projectName,
   versions,
   selectedVersionId,
-  busy,
   dirty,
   saving,
   savedAt,
   onSelectVersion,
   onSave,
-  onNewVersion,
-  onExportPdf,
   onToggleNav,
   rightTab,
   onSelectRightTab,
   zoomed,
   onToggleZoom,
-  onOpenHistory,
-  historyOpen,
   mobileView,
   onSetView,
-  onFit,
-  sectionsAvailable,
-  showSections,
-  onToggleSections,
+  onOpenCommands,
 }: VersionBarProps) {
-  // Mobile only: an options menu collapsing the less-frequent actions behind a
-  // single button.
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!menuOpen) return
-    const onDown = (e: PointerEvent) => {
-      const t = e.target as Node
-      if (menuRef.current !== null && !menuRef.current.contains(t)) setMenuOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuOpen(false)
-    }
-    window.addEventListener('pointerdown', onDown)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('pointerdown', onDown)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [menuOpen])
-
-  const saveLabel = saving ? 'Saving…' : dirty ? 'Save' : 'Saved'
   const savedTime =
     savedAt !== null
       ? new Date(savedAt).toLocaleTimeString([], {
@@ -124,11 +96,13 @@ export function VersionBar({
           minute: '2-digit',
         })
       : null
+
   // versions[] is most-recent-first, so index 0 is the latest.
   const latestId = versions.length > 0 ? versions[0].file.id : null
 
-  // The options menu is for the script views; in the notes view it's hidden.
-  const optionsVisible = mobileView !== 'notes'
+  // One slot rather than a button plus a timestamp beside it: the three states
+  // are mutually exclusive, so they belong in one place.
+  const status = saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved'
 
   return (
     <div className="verbar">
@@ -143,15 +117,17 @@ export function VersionBar({
         <MenuIcon />
       </button>
 
-      <span className="verbar__project" title={projectName}>
-        {projectName}
-      </span>
-
-      <label className="verbar__version">
-        <span className="verbar__label">Version</span>
+      <div className="verbar__identity">
+        <span className="verbar__project" title={projectName}>
+          {projectName}
+        </span>
+        <span className="verbar__sep" aria-hidden="true">
+          /
+        </span>
         <select
           className="verbar__select"
           value={selectedVersionId ?? ''}
+          aria-label="Draft"
           onChange={(e) => onSelectVersion(e.target.value)}
         >
           {versions.map((v) => (
@@ -161,7 +137,26 @@ export function VersionBar({
             </option>
           ))}
         </select>
-      </label>
+      </div>
+
+      {/* Clickable only when there's something to save; otherwise it's a
+          status read-out, not a control that does nothing when pressed. */}
+      <button
+        type="button"
+        className={`verbar__status verbar__status--${
+          saving ? 'saving' : dirty ? 'dirty' : 'clean'
+        }`}
+        onClick={onSave}
+        disabled={saving || !dirty}
+        title={
+          savedTime !== null
+            ? `Last saved ${savedTime} — auto-saves in the background; ⌘/Ctrl+S to save now`
+            : 'Auto-saves in the background; ⌘/Ctrl+S to save now'
+        }
+      >
+        <span className="verbar__status-dot" aria-hidden="true" />
+        <span className="verbar__status-text">{status}</span>
+      </button>
 
       <div className="verbar__spacer" />
 
@@ -213,148 +208,6 @@ export function VersionBar({
         </button>
       </div>
 
-      {/* History is scoped to the open version, so it belongs beside the
-          version selector — and it's a look-and-restore errand, so it opens as
-          a dialog rather than claiming a pane. */}
-      <button
-        type="button"
-        className={`verbar__btn verbar__btn--inline-action${
-          historyOpen ? ' verbar__btn--pressed' : ''
-        }`}
-        onClick={onOpenHistory}
-        aria-haspopup="dialog"
-        aria-expanded={historyOpen}
-        title="View and restore recent edits to this version"
-      >
-        History
-      </button>
-
-      {savedTime !== null && !saving && (
-        <span className="verbar__saved-at" title={`Last saved at ${savedTime}`}>
-          Last saved {savedTime}
-        </span>
-      )}
-
-      <button
-        type="button"
-        className="verbar__btn"
-        onClick={onSave}
-        disabled={saving || !dirty}
-        title="Auto-saves in the background; ⌘/Ctrl+S or click to save now"
-      >
-        {saveLabel}
-      </button>
-      <button
-        type="button"
-        className="verbar__btn verbar__btn--inline-action"
-        onClick={onExportPdf}
-        disabled={busy || saving}
-        title="Render the current preview to a PDF, stored beside the versions"
-      >
-        Export PDF
-      </button>
-      <button
-        type="button"
-        className="verbar__btn verbar__btn--primary verbar__btn--inline-action"
-        onClick={onNewVersion}
-        disabled={busy || saving}
-        title="Snapshot the current text as a new version"
-      >
-        New version
-      </button>
-
-      {/* Mobile only: Export PDF / New version (+ Fit / Sections in preview)
-          collapse into this menu. Hidden in the notes view. */}
-      {optionsVisible && (
-        <div className="verbar__menu" ref={menuRef}>
-          <button
-            type="button"
-            className="verbar__btn verbar__options"
-            onClick={() => setMenuOpen((open) => !open)}
-            disabled={busy || saving}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-label="More options"
-            title="More options"
-          >
-            <MoreIcon />
-          </button>
-          {menuOpen && (
-            <div className="verbar__popup" role="menu">
-              <button
-                type="button"
-                className="verbar__popup-item"
-                role="menuitem"
-                disabled={busy || saving}
-                onClick={() => {
-                  setMenuOpen(false)
-                  onExportPdf()
-                }}
-              >
-                Export PDF
-              </button>
-              <button
-                type="button"
-                className="verbar__popup-item"
-                role="menuitem"
-                disabled={busy || saving}
-                onClick={() => {
-                  setMenuOpen(false)
-                  onNewVersion()
-                }}
-              >
-                New version
-              </button>
-              {/* History is hidden from the bar at this width (it carries
-                  --inline-action), so without an entry here it would be
-                  unreachable on a phone entirely. */}
-              <button
-                type="button"
-                className="verbar__popup-item"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false)
-                  onOpenHistory()
-                }}
-              >
-                History
-              </button>
-              {mobileView === 'preview' && (
-                <>
-                  <div className="verbar__popup-divider" aria-hidden="true" />
-                  <button
-                    type="button"
-                    className="verbar__popup-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      onFit()
-                    }}
-                  >
-                    Fit to screen
-                  </button>
-                  {sectionsAvailable && (
-                    <button
-                      type="button"
-                      className="verbar__popup-item"
-                      role="menuitemcheckbox"
-                      aria-checked={showSections}
-                      onClick={() => {
-                        setMenuOpen(false)
-                        onToggleSections()
-                      }}
-                    >
-                      {showSections && <CheckIcon />}
-                      Sections
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Mobile only, rightmost: every destination visible, one tap each. */}
       <div className="verbar__viewswitch">
         <ViewSwitch
@@ -364,6 +217,20 @@ export function VersionBar({
           label="View"
         />
       </div>
+
+      <button
+        type="button"
+        className="verbar__commands"
+        onClick={onOpenCommands}
+        aria-haspopup="dialog"
+        aria-label="Commands"
+        title="Commands (⌘/Ctrl+K)"
+      >
+        <CommandIcon />
+        <span className="verbar__commands-key" aria-hidden="true">
+          K
+        </span>
+      </button>
     </div>
   )
 }

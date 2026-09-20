@@ -7,6 +7,7 @@ import { FileNav } from './components/FileNav'
 import { VersionBar } from './components/VersionBar'
 import { HistoryPanel } from './components/HistoryPanel'
 import { NotesPanel } from './components/NotesPanel'
+import { CommandPalette, type Command } from './components/CommandPalette'
 import {
   createBinaryFile,
   createFile,
@@ -71,6 +72,13 @@ import { MenuIcon } from './components/icons'
 import { useIsMobile } from './useIsMobile'
 import { useAppViewportHeight } from './useAppViewportHeight'
 import './App.css'
+
+// Shown in command hints. Matches the actual handler, which accepts either.
+const MOD_KEY =
+  typeof navigator !== 'undefined' &&
+  /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent)
+    ? '\u2318'
+    : 'Ctrl+'
 
 // Background auto-save: persist after the user pauses, or after enough edits,
 // or if too long has passed since the last save while typing continuously.
@@ -179,6 +187,9 @@ export default function App() {
   // dialog, where any snapshot can be restored.
   const [history, setHistory] = useState<HistorySnapshot[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  // Command palette visibility. Like `zoomed`, deliberately not persisted — it
+  // is a momentary door, not a layout.
+  const [showCommands, setShowCommands] = useState(false)
   // Live mirror of `history` for the async snapshot recorder/writer, plus the
   // project it belongs to and the Drive file id (created lazily on first write).
   const historyRef = useRef<HistorySnapshot[]>([])
@@ -368,9 +379,16 @@ export default function App() {
   })
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+      if (!(e.metaKey || e.ctrlKey)) return
+      const key = e.key.toLowerCase()
+      if (key === 's') {
         e.preventDefault()
         persistRef.current()
+      } else if (key === 'k') {
+        // Toggle: the same keystroke that opened it closes it, so ⌘K is never
+        // a trap you have to find Escape to get out of.
+        e.preventDefault()
+        setShowCommands((open) => !open)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -1026,6 +1044,116 @@ export default function App() {
     })
   }
 
+  // Every command the app can perform, as one list. The top bar shows three
+  // things; this is where the rest lives, reachable by name rather than by
+  // remembering which bar or menu once held the button.
+  //
+  // Order is authored, not alphabetical — the palette's sort is stable, so an
+  // empty query shows these groups in this sequence.
+  const commands: Command[] = [
+    {
+      id: 'save',
+      label: 'Save now',
+      group: 'Script',
+      hint: MOD_KEY + 'S',
+      disabled: !dirty,
+      run: () => void persist(),
+    },
+    {
+      id: 'new-version',
+      label: 'New draft from current text',
+      group: 'Script',
+      keywords: 'version snapshot copy',
+      disabled: selectedProjectId === null || busy,
+      run: newVersion,
+    },
+    {
+      id: 'export-pdf',
+      label: 'Export PDF',
+      group: 'Script',
+      keywords: 'print pdf render',
+      disabled: selectedVersionId === null || busy,
+      run: exportPdf,
+    },
+    {
+      id: 'history',
+      label: 'Edit history…',
+      group: 'Script',
+      keywords: 'revisions undo restore snapshots',
+      disabled: selectedVersionId === null,
+      run: () => setShowHistory(true),
+    },
+    {
+      id: 'new-project',
+      label: 'New project',
+      group: 'Library',
+      keywords: 'create screenplay folder',
+      disabled: folderId === null || busy,
+      run: newProject,
+    },
+    {
+      id: 'change-folder',
+      label: 'Change working folder',
+      group: 'Library',
+      keywords: 'drive google directory',
+      run: () => void choose(),
+    },
+    {
+      id: 'view-editor',
+      label: 'Show editor only',
+      group: 'View',
+      keywords: 'write full screen distraction free',
+      run: () => (isMobile ? setMobileView('editor') : setZoomed('left')),
+    },
+    {
+      id: 'view-preview',
+      label: 'Show preview',
+      group: 'View',
+      keywords: 'pages render script',
+      run: () =>
+        isMobile ? setMobileView('preview') : (setRightTab('preview'), setZoomed(null)),
+    },
+    {
+      id: 'view-notes',
+      label: 'Show notes',
+      group: 'View',
+      keywords: 'notebook scratch',
+      run: () =>
+        isMobile ? setMobileView('notes') : (setRightTab('notes'), setZoomed(null)),
+    },
+    {
+      id: 'fit-preview',
+      label: 'Fit preview page to the pane',
+      group: 'View',
+      keywords: 'zoom scale width',
+      disabled: rightTab !== 'preview',
+      run: () => setFitNonce((n) => n + 1),
+    },
+    {
+      id: 'toggle-sections',
+      label: (showSections ? 'Hide' : 'Show') + ' section ranges',
+      group: 'View',
+      hint: showSections ? 'On' : 'Off',
+      keywords: 'acts structure bands colours',
+      disabled: sections.length === 0,
+      run: () => setShowSections((v) => !v),
+    },
+    {
+      id: 'toggle-nav',
+      label: (navCollapsed ? 'Show' : 'Hide') + ' project panel',
+      group: 'View',
+      keywords: 'sidebar files tree drawer',
+      run: () => setNavCollapsed((c) => !c),
+    },
+    {
+      id: 'toggle-theme',
+      label: 'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' theme',
+      group: 'View',
+      keywords: 'dark light appearance',
+      run: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
+    },
+  ]
+
   if (auth.status === 'restoring') {
     return (
       <div className="signin">
@@ -1131,7 +1259,6 @@ export default function App() {
               projectName={selectedProject?.name ?? ''}
               versions={versions}
               selectedVersionId={selectedVersionId}
-              busy={busy}
               dirty={dirty}
               saving={saveState === 'saving'}
               savedAt={savedAt}
@@ -1139,21 +1266,14 @@ export default function App() {
                 selectedProjectId !== null && selectVersion(selectedProjectId, id)
               }
               onSave={() => void persist()}
-              onNewVersion={newVersion}
-              onExportPdf={exportPdf}
               onToggleNav={() => setNavCollapsed(false)}
               rightTab={rightTab}
               onSelectRightTab={selectRightTab}
               zoomed={zoomed === 'right'}
               onToggleZoom={toggleZoom}
-              onOpenHistory={() => setShowHistory((v) => !v)}
-              historyOpen={showHistory}
               mobileView={mobileView}
               onSetView={setMobileView}
-              onFit={() => setFitNonce((n) => n + 1)}
-              sectionsAvailable={sections.length > 0}
-              showSections={showSections}
-              onToggleSections={() => setShowSections((v) => !v)}
+              onOpenCommands={() => setShowCommands(true)}
             />
             <div className="workspace__editor">
               {(() => {
@@ -1283,6 +1403,12 @@ export default function App() {
           </>
         )}
       </div>
+      {showCommands && (
+        <CommandPalette
+          commands={commands}
+          onClose={() => setShowCommands(false)}
+        />
+      )}
     </div>
   )
 }
