@@ -102,41 +102,16 @@
   cursor: pointer;
 }
 
-.tree__version-row.is-selected {
-  background: var(--accent);
-}
-
-.tree__version-row.is-selected .tree__version {
-  color: var(--on-accent);
-}/*
- * Mobile: the file nav is never inline. Collapsed, it's absent entirely — the
- * toggle lives inline in the top bar (see VersionBar's .verbar__nav and App's
- * .mobilebar). Expanded, it's a drawer that slides over the editor with a
- * dimmed backdrop. Selecting a project/version closes it (see App.tsx).
- *//*
- * Icon alignment. The chrome draws with inline SVG (components/icons.tsx)
- * rather than emoji, so the rows that pair an icon with a label need to be
- * flex containers — a bare <svg> in a text flow sits on the line box and
- * leaves the label riding high next to it.
- */
-
-.tree__label,
-.tree__version,
-.tree__pdf {
+.tree__label {
   display: flex;
   align-items: center;
   gap: 6px;
-}/* Icons take their size from the row's type rather than the 24px viewBox. */
+}
 
+/* Icons take their size from the row's type rather than the 24px viewBox. */
 .tree__root svg,
-.tree__label svg,
-.tree__version svg,
-.tree__pdf svg {
+.tree__label svg {
   width: 14px;
   height: 14px;
   color: var(--text-faint);
-}/* A selected row inverts, so its icon has to come along or it vanishes. */
-
-.tree__version-row.is-selected .tree__version svg {
-  color: inherit;
 }
