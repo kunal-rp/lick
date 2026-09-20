@@ -14,6 +14,7 @@ import { JumpToLinePlugin } from './lexical/plugins/JumpToLinePlugin'
 import { RevealPreviewPlugin } from './lexical/plugins/RevealPreviewPlugin'
 import { CaretVisibilityPlugin } from './lexical/plugins/CaretVisibilityPlugin'
 import { ScriptKeysPlugin } from './lexical/plugins/ScriptKeysPlugin'
+import { CaretLinePlugin } from './lexical/plugins/CaretLinePlugin'
 import { LineFormatPlugin } from './lexical/plugins/LineFormatPlugin'
 import { LineParagraphsPlugin } from './lexical/plugins/LineParagraphsPlugin'
 import { seedFrom } from './lexical/document'
@@ -37,6 +38,8 @@ interface EditorProps {
   onScrollChange?: (top: number) => void
   /** Double-clicking a line reports it so the preview can scroll to it. */
   onRevealInPreview?: (line: number) => void
+  /** Reports the caret's source line, so the outline can mark where you are. */
+  onCaretLine?: (line: number) => void
 }
 
 /**
@@ -57,6 +60,7 @@ export function Editor({
   initialScrollTop,
   onScrollChange,
   onRevealInPreview,
+  onCaretLine,
 }: EditorProps) {
   const initialConfig = {
     namespace: 'fountain-editor',
@@ -122,6 +126,7 @@ export function Editor({
         <EmphasisShortcutsPlugin />
         <JumpToLinePlugin target={jumpTo ?? null} />
         <RevealPreviewPlugin onReveal={onRevealInPreview} />
+        <CaretLinePlugin onCaretLine={onCaretLine} />
         <CaretVisibilityPlugin scrollRef={surfaceRef} />
         <OnChangeFountainPlugin onChange={onChange} />
       </LexicalComposer>

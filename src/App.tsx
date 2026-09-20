@@ -184,6 +184,29 @@ export default function App() {
   const revealInPreview = (line: number) =>
     setReveal((r) => ({ line, nonce: (r?.nonce ?? 0) + 1 }))
 
+  // The caret's source line, reported by the editor — what the Outline marks
+  // as "you are here".
+  const [caretLine, setCaretLine] = useState(0)
+
+  /**
+   * Go to a source line from outside both panes — the Outline and Cast tabs.
+   *
+   * Moves the editor *and* the preview. Those are two views of one script, and
+   * jumping one while the other stayed put meant clicking a scene in the
+   * outline left the pages showing a different part of the film than the text
+   * beside them.
+   *
+   * The two cross-pane handlers stay one-way on purpose: clicking in the
+   * preview jumps the editor, and double-clicking in the editor reveals in the
+   * preview. Each is already a deliberate move *from* the pane you're looking
+   * at, so scrolling that pane too would be answering a question nobody asked
+   * — and making either symmetric would have them chase each other.
+   */
+  const goToLine = (line: number) => {
+    jumpToLine(line)
+    revealInPreview(line)
+  }
+
   // Bumped to force the (otherwise uncontrolled) editor to remount and re-seed
   // its text — used when restoring a history snapshot into the open version.
   const [editorReloadNonce, setEditorReloadNonce] = useState(0)
@@ -1251,8 +1274,9 @@ export default function App() {
         ) : sidebarTab === 'outline' ? (
           <OutlinePanel
             source={source}
+            currentLine={caretLine}
             onJump={(line) => {
-              jumpToLine(line)
+              goToLine(line)
               // On a phone the drawer covers the editor it just moved, so get
               // out of the way — the jump is the whole point of the tap.
               if (isMobile) setNavCollapsed(true)
@@ -1262,7 +1286,7 @@ export default function App() {
           <InsightsPanel
             source={source}
             onJump={(line) => {
-              jumpToLine(line)
+              goToLine(line)
               if (isMobile) setNavCollapsed(true)
             }}
             initialGroups={layoutRef.current.insightsGroups}
@@ -1361,6 +1385,7 @@ export default function App() {
                       }
                     }}
                     onRevealInPreview={revealInPreview}
+                    onCaretLine={setCaretLine}
                   />
                 )
                 const notesNode = (

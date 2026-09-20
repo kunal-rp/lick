@@ -243,12 +243,9 @@
  * was pinned to the left edge, so a full-width editor put the script in the
  * left two-thirds with dead space beside it.
  *
- * Now the block is centred, and its type scales with the pane so the 60
- * characters actually span it. The clamp is what keeps that sane: without a
- * ceiling a wide monitor would set the script in 40px type, and without a
- * floor a narrow pane would set it in 6px. `cqi` is a percentage of the
- * editor's own width (the container is declared on .editor__surface), so this
- * responds to the split divider, not to the window.
+ * Now the block is centred, and its type scales with the pane. `cqi` is a
+ * percentage of the editor's own width (the container is declared on
+ * .editor__surface), so this responds to the split divider, not to the window.
  */
 .editor__content {
   position: relative;
@@ -262,9 +259,16 @@
   padding: 20px 24px;
   color: var(--text);
   font-family: 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
-  /* 60ch == 36 × font-size in this face, so ~2.4cqi fills the pane and leaves
-     the gutter the padding needs. Raise the ceiling for larger type. */
-  font-size: clamp(12px, 2.4cqi, 22px);
+  /*
+   * 60ch == 36 × font-size in this face, so ~2.4cqi is the size at which the
+   * measure exactly spans the pane. The ceiling is the real decision: a script
+   * is 60 characters wide by definition, so "fill a 1400px pane" and "set the
+   * type at a comfortable size" are the same knob pulled in opposite
+   * directions. 16px keeps it close to the old fixed 14px while still growing
+   * with a narrow pane; the block is centred, so what's left over reads as
+   * margin rather than as the script hugging one edge.
+   */
+  font-size: clamp(12px, 2.4cqi, 16px);
   line-height: 1.7;
   tab-size: 4;
   white-space: pre-wrap;
@@ -360,7 +364,7 @@
   padding: 0 24px;
   color: var(--text-faint);
   font-family: 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
-  font-size: clamp(12px, 2.4cqi, 22px);
+  font-size: clamp(12px, 2.4cqi, 16px);
   line-height: 1.7;
   pointer-events: none;
   user-select: none;
