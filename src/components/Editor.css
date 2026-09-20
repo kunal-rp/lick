@@ -220,6 +220,9 @@
 
 .editor__surface {
   position: relative;
+  /* Reference for the @container query on the indents below: the editor's own
+     width, not the window's — the split pane makes those different. */
+  container: editor / inline-size;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -331,6 +334,111 @@
 
 .fe-paragraph {
   margin: 0;
+}
+
+/*
+ * Screenplay formatting, in place.
+ *
+ * LineFormatPlugin tags each line's paragraph with `data-el` — what that line
+ * will print as — and these rules lay it out accordingly, so the editor shows
+ * a script instead of raw markup sitting beside a rendered copy of itself.
+ *
+ * The measurements are the standard US screenplay ones, expressed as `em` of
+ * the monospace body so they hold at any font size: a 6" text block from a 1.5"
+ * left margin, dialogue inset 2.5" from the page's left edge (1" from the text
+ * block), parentheticals 3", character cues 3.5". In a 12pt Courier that's 10
+ * characters to the inch, so 1" == 10em.
+ *
+ * Indents are `padding` rather than `margin` so each line's clickable box still
+ * spans the full column — clicking in the gutter beside a cue puts the caret on
+ * that line, as it would in any editor.
+ */
+.editor__content [data-el='scene_heading'] {
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* A blank line before every slug, so scenes separate visually the way they do
+   on the page. Not on the first, which would push the script off its top. */
+.editor__content [data-el='scene_heading']:not(:first-child) {
+  margin-top: 1.2em;
+}
+
+.editor__content [data-el='character'] {
+  padding-left: 20em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.editor__content [data-el='parenthetical'] {
+  padding-left: 15em;
+  color: var(--text-muted);
+}
+
+.editor__content [data-el='dialogue'] {
+  padding-left: 10em;
+  padding-right: 8em;
+}
+
+.editor__content [data-el='transition'] {
+  padding-left: 38em;
+  text-transform: uppercase;
+}
+
+.editor__content [data-el='centered'] {
+  text-align: center;
+}
+
+.editor__content [data-el='lyrics'] {
+  padding-left: 10em;
+  font-style: italic;
+}
+
+/* Non-printing lines. Fountain's own `#` sections and `=` synopses, and this
+   editor's `{{section:…}}` range markers, are notes to the writer — dimmed so
+   they read as scaffolding rather than script. This is Slugline's convention
+   for the characters that won't appear in the printed screenplay. */
+.editor__content [data-el='note'],
+.editor__content [data-el='marker'] {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.editor__content [data-el='title_page'] {
+  color: var(--text-muted);
+}
+
+/* A forced page break (`===`) is a rule, not a row of equals signs. */
+.editor__content [data-el='page_break'] {
+  color: var(--text-faint);
+  letter-spacing: 0.3em;
+}
+
+/*
+ * Narrow windows can't hold a 6" text block at these indents — the dialogue
+ * column would wrap to two or three characters. Below the split's usable width
+ * everything shifts to a flat-left layout, keeping the casing and weight cues
+ * (which are what identify an element at a glance) and dropping the geometry.
+ */
+@container editor (max-width: 620px) {
+  .editor__content [data-el='character'] {
+    padding-left: 4em;
+  }
+  .editor__content [data-el='parenthetical'] {
+    padding-left: 3em;
+  }
+  .editor__content [data-el='dialogue'] {
+    padding-left: 2em;
+    padding-right: 0;
+  }
+  .editor__content [data-el='transition'] {
+    padding-left: 0;
+    text-align: right;
+  }
+  .editor__content [data-el='lyrics'] {
+    padding-left: 2em;
+  }
 }
 
 /* Capitalization checker: an underlay of clickable underlines over any text
@@ -684,6 +792,10 @@
 @media (max-width: 768px) {
   .scriptkeys {
     display: flex;
+    /* Below the format toolbar, so the element keys are the row closest to the
+       keyboard — they're what you reach for while actually writing, whereas
+       B/I/U and Find are occasional. See the ordering note above. */
+    order: 3;
     flex: 0 0 auto;
     align-items: center;
     gap: 4px;

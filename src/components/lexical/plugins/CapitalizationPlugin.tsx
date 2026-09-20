@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import {
-  $createLineBreakNode,
-  $createParagraphNode,
-  $createTextNode,
-  $getRoot,
-} from 'lexical'
+import { $getRoot } from 'lexical'
 import {
   applyCapSuggestions,
   detectCapitalization,
   type CapSuggestion,
 } from '../../../fountain'
 import { rangeForSpan } from '../offsets'
+import { $setSourceText, readSource } from '../document'
 
 // One on-screen highlight box: a client rect of a suggestion's range, mapped to
 // the editor content's coordinate space (a suggestion can wrap onto several).
@@ -71,7 +67,7 @@ export function CapitalizationPlugin() {
         observed = root
       }
 
-      const text = editor.getEditorState().read(() => $getRoot().getTextContent())
+      const text = readSource(editor)
       const next = detectCapitalization(text)
 
       const sig = next.map((s) => s.id).join('|')
@@ -122,25 +118,18 @@ export function CapitalizationPlugin() {
     if (open) setChecked(new Set(suggestions.map((s) => s.id)))
   }, [open, suggestions])
 
-  // Replace the whole document with `text`, preserving the scroll position. The
-  // structure mirrors the editor's seed (one paragraph, lines split by break
-  // nodes) so every offset-based overlay keeps working after an apply. The write
-  // flows through onChange → autosave like any edit, and each save is captured
-  // in the History drawer, so a batch is always recoverable there.
+  // Replace the whole document with `text`, preserving the scroll position.
+  // $setSourceText rebuilds it in the editor's canonical shape (one paragraph
+  // per line) so every offset-based overlay keeps working after an apply. The
+  // write flows through onChange → autosave like any edit, and each save is
+  // captured in the History drawer, so a batch is always recoverable there.
   const replaceText = (text: string) => {
     const root = editor.getRootElement()
     const surface = root?.closest('.editor__surface') as HTMLElement | null
     const savedScroll = surface?.scrollTop ?? null
     editor.update(() => {
-      const r = $getRoot()
-      r.clear()
-      const paragraph = $createParagraphNode()
-      text.split('\n').forEach((line, i) => {
-        if (i > 0) paragraph.append($createLineBreakNode())
-        if (line.length > 0) paragraph.append($createTextNode(line))
-      })
-      r.append(paragraph)
-      r.selectEnd()
+      $setSourceText(text)
+      $getRoot().selectEnd()
     })
     if (surface !== null && savedScroll !== null) {
       requestAnimationFrame(() => {
@@ -153,7 +142,7 @@ export function CapitalizationPlugin() {
   const applySelected = () => {
     const chosen = suggestions.filter((s) => checked.has(s.id))
     if (chosen.length === 0) return
-    const text = editor.getEditorState().read(() => $getRoot().getTextContent())
+    const text = readSource(editor)
     replaceText(applyCapSuggestions(text, chosen))
     setOpen(false)
   }

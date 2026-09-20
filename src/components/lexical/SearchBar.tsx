@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { $getSelection, $getRoot, $isRangeSelection } from 'lexical'
+import { $getSelection, $isRangeSelection } from 'lexical'
 import { scrollOffsetIntoView, selectRange } from './offsets'
+import { $sourceText } from './document'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -42,7 +43,7 @@ export function SearchBar() {
     const recompute = () => {
       const text = editor
         .getEditorState()
-        .read(() => $getRoot().getTextContent())
+        .read($sourceText)
       setMatches(findMatches(text, query))
     }
     recompute()

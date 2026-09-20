@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { $getRoot } from 'lexical'
 import { lineBounds, scrollOffsetIntoView, selectRange } from '../offsets'
+import { $sourceText } from '../document'
 
 interface Props {
   /**
@@ -14,8 +15,8 @@ interface Props {
 
 /**
  * Reveals a source line in the editor: scrolls to it, selects that line's text,
- * and focuses. Used by the preview (on text selection) and the Characters &
- * Locations panel (on reference click).
+ * and focuses. Used by the preview (on text selection) and by the sidebar's
+ * Outline and Cast tabs (on entry click).
  */
 export function JumpToLinePlugin({ target }: Props) {
   const [editor] = useLexicalComposerContext()
@@ -24,7 +25,7 @@ export function JumpToLinePlugin({ target }: Props) {
     if (target === null) return
 
     editor.update(() => {
-      const { start, end } = lineBounds($getRoot().getTextContent(), target.line)
+      const { start, end } = lineBounds($sourceText(), target.line)
       if (!selectRange(start, end)) $getRoot().selectEnd()
     })
 
@@ -34,7 +35,7 @@ export function JumpToLinePlugin({ target }: Props) {
     // selection we just set).
     requestAnimationFrame(() =>
       editor.getEditorState().read(() => {
-        const { start } = lineBounds($getRoot().getTextContent(), target.line)
+        const { start } = lineBounds($sourceText(), target.line)
         scrollOffsetIntoView(editor, start)
       }),
     )

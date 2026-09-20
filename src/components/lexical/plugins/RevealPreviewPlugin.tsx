@@ -7,24 +7,19 @@ interface Props {
 }
 
 // The 0-based source line of the current selection anchor within the editor.
-// The plain-text editor separates lines with <br> nodes, so the line index is
-// the number of <br>s before the anchor node.
+// Each source line is its own paragraph (see document.ts), so the line index is
+// the index of the root child containing the anchor.
 function lineOfSelection(root: HTMLElement): number | null {
   const selection = window.getSelection()
   if (selection === null || selection.rangeCount === 0) return null
   const node = selection.anchorNode
   if (node === null || !root.contains(node)) return null
 
-  const walker = document.createTreeWalker(
-    root,
-    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-  )
-  let line = 0
-  for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
-    if (n === node) return line
-    if (n.nodeName === 'BR') line += 1
+  const lines = Array.from(root.children)
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] === node || lines[i].contains(node)) return i
   }
-  return line
+  return null
 }
 
 /**

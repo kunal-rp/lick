@@ -1,4 +1,4 @@
-import type { LexicalEditor, LexicalNode, TextNode } from 'lexical'
+import type { LexicalEditor } from 'lexical'
 import {
   $createRangeSelection,
   $getRoot,
@@ -10,10 +10,19 @@ import {
 } from 'lexical'
 
 /**
- * Absolute character offsets within the editor's plain-text content, mapped to
- * concrete Lexical/DOM positions. The document is a single paragraph whose lines
- * are separated by line-break nodes, and each break contributes one "\n" to the
- * text content — the helpers here account for that.
+ * Absolute character offsets within the editor's Fountain source, mapped to
+ * concrete Lexical and DOM positions.
+ *
+ * The document is one paragraph per source line (see document.ts), so the
+ * newline between two lines is a *paragraph boundary* rather than a character
+ * in any text node. Everything here walks paragraphs and adds one for each
+ * boundary crossed — the previous shape put a `<br>` in the flow and counted
+ * that instead.
+ *
+ * Walking `root.children` directly, rather than a TreeWalker over every text
+ * node, is what makes an empty line unambiguous: Lexical renders it as a
+ * `<p><br></p>`, whose paragraph box has a real rect even though it holds no
+ * text, so a caret there can still be located and measured.
  */
 
 /** Start/end character offsets of a 0-based line within the source text. */
@@ -28,141 +37,112 @@ export function lineBounds(
   return { start, end: start + parts[clamped].length }
 }
 
-/** Map an absolute offset to a {text node, local offset} among the children. */
-export function locate(
-  children: LexicalNode[],
-  offset: number,
-): { node: TextNode; offset: number } | null {
+/** Start offset of the line containing `offset` within `text`. */
+export function lineStartAt(text: string, offset: number): number {
+  const before = text.lastIndexOf('\n', Math.max(0, offset - 1))
+  return before === -1 ? 0 : before + 1
+}
+
+/** The line elements of the contentEditable — one per source line. */
+function lineElements(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.children) as HTMLElement[]
+}
+
+/**
+ * Split an absolute offset into a line index and a column within that line,
+ * measured against the DOM (so it stays correct even if the caller's copy of
+ * the source is a render behind). Returns null when the offset is past the end.
+ */
+function locateInDom(
+  root: HTMLElement,
+  target: number,
+): { line: HTMLElement; column: number } | null {
+  const lines = lineElements(root)
   let acc = 0
-  let last: TextNode | null = null
-  for (const child of children) {
-    if ($isTextNode(child)) {
-      const len = child.getTextContentSize()
-      if (offset <= acc + len) return { node: child, offset: offset - acc }
-      acc += len
-      last = child
-    } else {
-      // Line breaks contribute one character to the text content.
-      acc += 1
-    }
+  for (let i = 0; i < lines.length; i++) {
+    const length = lines[i].textContent?.length ?? 0
+    if (target <= acc + length) return { line: lines[i], column: target - acc }
+    acc += length + 1 // the paragraph boundary is the "\n"
   }
-  return last === null ? null : { node: last, offset: last.getTextContentSize() }
+  const last = lines[lines.length - 1]
+  return last === undefined
+    ? null
+    : { line: last, column: last.textContent?.length ?? 0 }
+}
+
+/**
+ * Resolve a column within one line element to a DOM {node, offset} pair usable
+ * with `Range.setStart`. Empty lines have no text node, so the paragraph itself
+ * is returned with offset 0 — a range there still measures.
+ */
+function domPoint(
+  line: HTMLElement,
+  column: number,
+): { node: Node; offset: number } {
+  const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
+  let acc = 0
+  let last: Text | null = null
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    const text = node as Text
+    const length = text.nodeValue?.length ?? 0
+    if (column <= acc + length) return { node: text, offset: column - acc }
+    acc += length
+    last = text
+  }
+  return last === null
+    ? { node: line, offset: 0 }
+    : { node: last, offset: last.nodeValue?.length ?? 0 }
 }
 
 /** A collapsed DOM Range at `offset` within the contentEditable, or null. */
 export function rangeAtOffset(root: HTMLElement, offset: number): Range | null {
-  const walker = document.createTreeWalker(
-    root,
-    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-  )
-  let acc = 0
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const len = node.nodeValue?.length ?? 0
-      if (offset <= acc + len) {
-        const range = document.createRange()
-        range.setStart(node, offset - acc)
-        range.collapse(true)
-        return range
-      }
-      acc += len
-    } else if (node.nodeName === 'BR') {
-      if (offset === acc) {
-        const range = document.createRange()
-        range.setStartBefore(node)
-        range.collapse(true)
-        return range
-      }
-      acc += 1
-    }
-  }
-  return null
+  const at = locateInDom(root, offset)
+  if (at === null) return null
+  const point = domPoint(at.line, at.column)
+  const range = document.createRange()
+  range.setStart(point.node, point.offset)
+  range.collapse(true)
+  return range
 }
 
 /**
- * Resolve an absolute character offset to a concrete DOM boundary {node, offset}
- * suitable for `Range.setStart`/`setEnd`. Walks text nodes and <br> breaks (each
- * <br> contributing one "\n"); an offset that lands on a break boundary snaps to
- * the end of the preceding text so the returned point is always inside text.
- */
-function domBoundary(
-  root: HTMLElement,
-  target: number,
-): { node: Node; offset: number } | null {
-  const walker = document.createTreeWalker(
-    root,
-    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-  )
-  let acc = 0
-  let lastText: Text | null = null
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const len = node.nodeValue?.length ?? 0
-      if (target <= acc + len) return { node, offset: target - acc }
-      acc += len
-      lastText = node as Text
-    } else if (node.nodeName === 'BR') {
-      if (target === acc && lastText !== null) {
-        return { node: lastText, offset: lastText.nodeValue?.length ?? 0 }
-      }
-      acc += 1
-    }
-  }
-  return lastText === null
-    ? null
-    : { node: lastText, offset: lastText.nodeValue?.length ?? 0 }
-}
-
-/**
- * A DOM Range spanning the absolute offsets `[start, end)` within the
- * contentEditable, or null if either endpoint can't be mapped. Callers use
- * `getClientRects()` on it to draw highlights over the spanned text.
+ * A DOM Range spanning the absolute offsets `[start, end)`, or null if either
+ * endpoint can't be mapped. Callers use `getClientRects()` on it to draw
+ * highlights over the spanned text.
  */
 export function rangeForSpan(
   root: HTMLElement,
   start: number,
   end: number,
 ): Range | null {
-  const from = domBoundary(root, start)
-  const to = domBoundary(root, end)
+  const from = locateInDom(root, start)
+  const to = locateInDom(root, end)
   if (from === null || to === null) return null
+  const a = domPoint(from.line, from.column)
+  const b = domPoint(to.line, to.column)
   const range = document.createRange()
-  range.setStart(from.node, from.offset)
-  range.setEnd(to.node, to.offset)
+  range.setStart(a.node, a.offset)
+  range.setEnd(b.node, b.offset)
   return range
 }
 
 /**
- * Viewport `top` of an absolute character offset within the contentEditable,
- * walking text nodes and <br> line breaks (each <br> contributes one "\n").
- * An empty line is located via the <br>'s own box: a collapsed range placed
- * there reports a zero rect in Chrome, whereas the <br> element has a real one.
- * Returns null if the offset can't be located.
+ * Viewport `top` of an absolute character offset within the contentEditable.
+ * A collapsed range on an empty line reports a zero rect in Chrome, so the
+ * line element's own box is used whenever the range doesn't measure.
  */
 export function topOfOffset(root: HTMLElement, target: number): number | null {
-  const walker = document.createTreeWalker(
-    root,
-    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-  )
-  let acc = 0
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const len = node.nodeValue?.length ?? 0
-      if (target <= acc + len) {
-        const range = document.createRange()
-        range.setStart(node, target - acc)
-        range.collapse(true)
-        const rects = range.getClientRects()
-        const rect = rects.length > 0 ? rects[0] : range.getBoundingClientRect()
-        return rect.top
-      }
-      acc += len
-    } else if (node.nodeName === 'BR') {
-      if (target === acc) return (node as HTMLElement).getBoundingClientRect().top
-      acc += 1
-    }
-  }
-  return null
+  const at = locateInDom(root, target)
+  if (at === null) return null
+  const point = domPoint(at.line, at.column)
+  const range = document.createRange()
+  range.setStart(point.node, point.offset)
+  range.collapse(true)
+  const rects = range.getClientRects()
+  if (rects.length > 0) return rects[0].top
+  const rect = range.getBoundingClientRect()
+  if (rect.height > 0 || rect.top !== 0) return rect.top
+  return at.line.getBoundingClientRect().top
 }
 
 /** Scroll the given absolute offset toward the top of the editor's surface. */
@@ -182,62 +162,99 @@ export function scrollOffsetIntoView(
 
 /**
  * Absolute character offset of the caret (the selection's focus), or null when
- * there's no range selection. Mirrors {@link locate} in reverse: it walks the
- * paragraph's children accumulating text sizes, counting each line break as the
- * single "\n" it contributes.
+ * there's no range selection.
  *
  * An anchor of type 'element' addresses a child *index* rather than a character
- * offset, which is what Lexical reports when the caret sits on an empty line, so
- * that case sums the children before the index instead of adding into one.
+ * offset — Lexical reports that when the caret sits on an empty line — so that
+ * case sums the children before the index instead of adding into one.
  */
 export function caretOffset(): number | null {
   const selection = $getSelection()
   if (!$isRangeSelection(selection)) return null
-  const para = $getRoot().getFirstChild()
-  if (!$isElementNode(para)) return null
 
   const point = selection.focus
-  const children = para.getChildren()
+  const node = point.getNode()
+  const paragraph = $isElementNode(node) ? node : node.getParent()
+  if (paragraph === null) return null
+
+  // Offsets of every line up to the one the caret is in.
+  let acc = 0
+  for (const child of $getRoot().getChildren()) {
+    if (child.getKey() === paragraph.getKey()) break
+    acc += child.getTextContentSize() + 1
+  }
 
   if (point.type === 'element') {
-    let acc = 0
+    // Child index within the paragraph: sum the text before it.
+    let column = 0
+    const children = $isElementNode(node) ? node.getChildren() : []
     for (let i = 0; i < point.offset && i < children.length; i++) {
-      const child = children[i]
-      acc += $isTextNode(child) ? child.getTextContentSize() : 1
+      column += children[i].getTextContentSize()
     }
-    return acc
+    return acc + column
   }
 
-  let acc = 0
-  for (const child of children) {
-    if (child.getKey() === point.key) return acc + point.offset
-    acc += $isTextNode(child) ? child.getTextContentSize() : 1
+  // Text point: sum the siblings before this text node, then add the offset.
+  let column = 0
+  for (const child of $isElementNode(paragraph) ? paragraph.getChildren() : []) {
+    if (child.getKey() === point.key) return acc + column + point.offset
+    column += child.getTextContentSize()
   }
-  return null
-}
-
-/** Start offset of the line containing `offset` within `text`. */
-export function lineStartAt(text: string, offset: number): number {
-  const before = text.lastIndexOf('\n', Math.max(0, offset - 1))
-  return before === -1 ? 0 : before + 1
+  return acc + column
 }
 
 /**
- * Select the text between two absolute offsets in the single-paragraph document.
- * Returns true if the selection was applied, false if the offsets couldn't be
+ * Select the text between two absolute offsets. Walks paragraphs to find the
+ * text node and column each offset lands in; returns false if either can't be
  * mapped (in which case the caller may fall back, e.g. to selectEnd).
  */
 export function selectRange(start: number, end: number): boolean {
-  const root = $getRoot()
-  const para = root.getFirstChild()
-  if (!$isElementNode(para)) return false
-  const children = para.getChildren()
-  const from = locate(children, start)
-  const to = locate(children, end)
+  const from = locateInState(start)
+  const to = locateInState(end)
   if (from === null || to === null) return false
   const selection = $createRangeSelection()
-  selection.anchor.set(from.node.getKey(), from.offset, 'text')
-  selection.focus.set(to.node.getKey(), to.offset, 'text')
+  selection.anchor.set(from.key, from.offset, from.type)
+  selection.focus.set(to.key, to.offset, to.type)
   $setSelection(selection)
   return true
+}
+
+/**
+ * Map an absolute offset to a Lexical selection point. Lands on a text node
+ * where one exists; an empty line has none, so the point addresses the
+ * paragraph itself ('element' type, offset 0).
+ */
+function locateInState(
+  target: number,
+): { key: string; offset: number; type: 'text' | 'element' } | null {
+  let acc = 0
+  const lines = $getRoot().getChildren()
+  for (const line of lines) {
+    const length = line.getTextContentSize()
+    if (target <= acc + length) {
+      let column = target - acc
+      if (!$isElementNode(line)) return null
+      const children = line.getChildren()
+      for (const child of children) {
+        const size = child.getTextContentSize()
+        if ($isTextNode(child) && column <= size) {
+          return { key: child.getKey(), offset: column, type: 'text' }
+        }
+        column -= size
+      }
+      // No text node (an empty line): address the paragraph.
+      return { key: line.getKey(), offset: 0, type: 'element' }
+    }
+    acc += length + 1
+  }
+  const last = lines[lines.length - 1]
+  if (last === undefined || !$isElementNode(last)) return null
+  const lastText = last.getChildren().filter($isTextNode).pop()
+  return lastText === undefined
+    ? { key: last.getKey(), offset: 0, type: 'element' }
+    : {
+        key: lastText.getKey(),
+        offset: lastText.getTextContentSize(),
+        type: 'text',
+      }
 }

@@ -9,6 +9,8 @@ export { renderEmphasis } from './emphasis'
 export { analyzeScript, buildInsights } from './insights'
 export { parseSections } from './sections'
 export { buildOutline } from './outline'
+export { lineTypes } from './lineTypes'
+export type { LineType } from './lineTypes'
 export type { OutlineEntry } from './outline'
 export type { Section } from './sections'
 export type {

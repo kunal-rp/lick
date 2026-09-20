@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { $getRoot } from 'lexical'
+import { readSource } from '../document'
+import { topOfOffset } from '../offsets'
 
 interface Props {
   /** Source line indices where the preview breaks a page (in order). */
   breakLines: number[]
 }
 
+// The shared implementation now lives in ../offsets — this file used to carry
+// its own copy of the DOM walker, which had to be kept in step by hand.
 /** Character offset of the start of each requested line, from the source. */
 function lineStartOffsets(text: string, lines: number[]): number[] {
   const parts = text.split('\n')
@@ -14,37 +17,6 @@ function lineStartOffsets(text: string, lines: number[]): number[] {
   prefix[0] = 0
   for (let k = 0; k < parts.length; k++) prefix[k + 1] = prefix[k] + parts[k].length + 1
   return lines.map((l) => prefix[Math.max(0, Math.min(l, parts.length - 1))])
-}
-
-/**
- * Viewport `top` of the given character offset within the contentEditable,
- * walking text nodes and <br> line breaks (each <br> == one "\n"). Returns null
- * if the offset can't be located.
- */
-function topOfOffset(root: HTMLElement, target: number): number | null {
-  const walker = document.createTreeWalker(
-    root,
-    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-  )
-  let acc = 0
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const len = node.nodeValue?.length ?? 0
-      if (target <= acc + len) {
-        const range = document.createRange()
-        range.setStart(node, target - acc)
-        range.collapse(true)
-        const rects = range.getClientRects()
-        const rect = rects.length > 0 ? rects[0] : range.getBoundingClientRect()
-        return rect.top
-      }
-      acc += len
-    } else if (node.nodeName === 'BR') {
-      if (target === acc) return (node as HTMLElement).getBoundingClientRect().top
-      acc += 1
-    }
-  }
-  return null
 }
 
 /**
@@ -67,7 +39,7 @@ export function PageBreakGuidesPlugin({ breakLines }: Props) {
         setTops([])
         return
       }
-      const text = editor.getEditorState().read(() => $getRoot().getTextContent())
+      const text = readSource(editor)
       const offsets = lineStartOffsets(text, breakLines)
       const rootTop = root.getBoundingClientRect().top
       const ys: number[] = []

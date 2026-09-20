@@ -1,6 +1,7 @@
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { $getRoot, $getSelection, $isRangeSelection } from 'lexical'
+import { $getSelection, $isRangeSelection } from 'lexical'
 import { caretOffset, lineStartAt, selectRange } from '../offsets'
+import { $sourceText } from '../document'
 
 /**
  * A row of Fountain element keys pinned above the on-screen keyboard.
@@ -74,7 +75,7 @@ export function ScriptKeysPlugin() {
       if (caret === null) return
 
       if (key.prefix !== null) {
-        const text = $getRoot().getTextContent()
+        const text = $sourceText()
         const edit = toggleLinePrefix(text, caret, key.prefix)
         if (!selectRange(edit.start, edit.end)) return
         const selection = $getSelection()

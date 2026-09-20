@@ -1,8 +1,8 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { $getRoot } from 'lexical'
 import type { Section } from '../../../fountain'
 import { lineBounds, topOfOffset } from '../offsets'
+import { readSource } from '../document'
 
 interface Props {
   /** Section ranges parsed from the current source. */
@@ -42,7 +42,7 @@ export function SectionBackgroundsPlugin({ sections }: Props) {
         setBands([])
         return
       }
-      const text = editor.getEditorState().read(() => $getRoot().getTextContent())
+      const text = readSource(editor)
       const lineCount = text.split('\n').length
       const rootTop = root.getBoundingClientRect().top
       const next: Band[] = []

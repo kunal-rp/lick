@@ -8,6 +8,8 @@ import { OutlinePanel } from './components/OutlinePanel'
 import { InsightsPanel } from './components/InsightsPanel'
 import { FileNav } from './components/FileNav'
 import { CommandPalette, type Command } from './components/CommandPalette'
+import { Editor } from './components/Editor'
+import { parseSections } from './fountain'
 import type { SidebarTab } from './layout'
 import './index.css'
 import './App.css'
@@ -78,6 +80,12 @@ function Harness() {
   const [pal, setPal] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [line, setLine] = useState(8)
+  const [src, setSrc] = useState(SOURCE)
+  const [jump, setJump] = useState<{ line: number; nonce: number } | null>(null)
+  const jumpTo = (l: number) => {
+    setLine(l)
+    setJump((j) => ({ line: l, nonce: (j?.nonce ?? 0) + 1 }))
+  }
 
   document.documentElement.setAttribute('data-theme', theme)
 
@@ -109,11 +117,11 @@ function Harness() {
             onChangeFolder={() => {}}
           />
         ) : tab === 'outline' ? (
-          <OutlinePanel source={SOURCE} currentLine={line} onJump={setLine} />
+          <OutlinePanel source={src} currentLine={line} onJump={jumpTo} />
         ) : tab === 'notes' ? (
           <div style={{ padding: 16, fontSize: 13 }}>(notes panel)</div>
         ) : (
-          <InsightsPanel source={SOURCE} onJump={setLine} />
+          <InsightsPanel source={src} onJump={jumpTo} />
         )}
       </Sidebar>
       <div className="workspace__main">
@@ -135,8 +143,17 @@ function Harness() {
           onSetView={setView}
           onOpenCommands={() => setPal(true)}
         />
-        <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>
-          editor · showPreview={String(prev)} zoomed={String(zoom)} caretLine={line}
+        <div style={{ flex: '1 1 auto', minHeight: 0 }}>
+          <Editor
+            initialValue={SOURCE}
+            onChange={setSrc}
+            pageBreakLines={[]}
+            sections={parseSections(src)}
+            jumpTo={jump}
+          />
+        </div>
+        <div style={{ padding: '6px 12px', color: 'var(--text-muted)', fontSize: 11, borderTop: '1px solid var(--border)' }}>
+          lines={src.split('\n').length} chars={src.length} caretLine={line}
         </div>
       </div>
       {pal && <CommandPalette commands={commands} onClose={() => setPal(false)} />}
