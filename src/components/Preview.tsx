@@ -80,7 +80,11 @@ function normalizeQuote(s: string): string {
 // Preview magnification bounds, as percentages.
 const ZOOM_MIN = 10
 const ZOOM_MAX = 200
-const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
+// Math.min/max propagate NaN rather than rejecting it, so an unmeasurable pane
+// would otherwise put NaN straight into the zoom slider's `value`. Fall back to
+// actual size, which is always a sane thing to be showing.
+const clampZoom = (z: number) =>
+  Number.isFinite(z) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) : 100
 
 // A renderable unit. Single elements and forced breaks map 1:1 to elements;
 // a dual pair coalesces a left and right dialogue block into one two-column row
@@ -617,6 +621,11 @@ export function Preview({
     // cropping the blank right margin to maximize legible size.
     const extentPx = (showMarginComments ? 8.5 : 7.5) * 96
     const available = scroll.clientWidth - padX
+    // A pane that hasn't been laid out yet measures as zero (or, if the element
+    // isn't in the document, as NaN via empty computed padding). Either way
+    // there's nothing to fit to — leave the zoom alone rather than snapping the
+    // page to the 10% floor and making the writer undo it.
+    if (!Number.isFinite(available) || available <= 0) return
     userZoomedRef.current = false // an explicit Fit re-enables mobile auto-fit
     setZoom(clampZoom(Math.floor((available / extentPx) * 100)))
   }, [showMarginComments])
@@ -643,6 +652,7 @@ export function Preview({
     const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
     const pageWidthPx = 8.5 * 96 // full sheet, so nothing crops
     const available = scroll.clientWidth - padX
+    if (!Number.isFinite(available) || available <= 0) return
     setZoom(clampZoom(Math.floor((available / pageWidthPx) * 100)))
   }, [])
 
